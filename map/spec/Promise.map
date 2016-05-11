@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "file": "Promise.js",
+  "sourceRoot": "../../spec",
+  "sources": [
+    "Promise.coffee"
+  ],
+  "names": [],
+  "mappings": ""
+}

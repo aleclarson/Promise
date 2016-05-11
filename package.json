@@ -1,0 +1,17 @@
+{
+  "name": "Promise",
+  "version": "1.0.0",
+  "main": "js/src/Promise",
+  "dependencies": {
+    "immediate": "~3.0.5",
+    "bindMethod": "aleclarson/bindMethod#1.0.0",
+    "type-utils": "aleclarson/type-utils#1.0.0",
+    "isNodeJS": "aleclarson/isNodeJS#1.0.0",
+    "Type": "aleclarson/Type#1.0.0"
+  },
+  "lotus": {
+    "plugins": [
+      "lotus-coffee"
+    ]
+  }
+}
