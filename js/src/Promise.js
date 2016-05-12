@@ -1,12 +1,14 @@
-var Any, Promise, QueueItem, Type, assert, assertType, bindMethod, getResolver, immediate, isType, ref, tryCatch, type;
-
-require("isNodeJS");
+var Any, Promise, QueueItem, Type, assert, assertType, bindMethod, emptyFunction, getResolver, immediate, isType, ref, sync, tryCatch, type;
 
 ref = require("type-utils"), Any = ref.Any, isType = ref.isType, assert = ref.assert, assertType = ref.assertType;
+
+emptyFunction = require("emptyFunction");
 
 bindMethod = require("bindMethod");
 
 immediate = require("immediate");
+
+sync = require("sync");
 
 Type = require("Type");
 
@@ -27,14 +29,16 @@ type.returnExisting(function(value) {
 
 type.defineValues({
   _state: 0,
-  _result: null,
-  _unhandled: isNodeJS ? true : void 0,
+  _unhandled: true,
+  _results: function() {
+    return [void 0];
+  },
   _queue: function() {
     return [];
   }
 });
 
-type.defineProperties({
+type.definePrototype({
   isFulfilled: {
     get: function() {
       return this._state > 0;
@@ -65,20 +69,45 @@ type.defineMethods({
     if (!this._canResolve(onFulfilled, onRejected)) {
       return this;
     }
+    this._unhandled = false;
     promise = Promise._defer();
-    if (isNodeJS) {
-      this._unhandled = false;
-    }
     if (this.isPending) {
-      this._queue.push(QueueItem(this, onFulfilled, onRejected));
+      this._queue.push(QueueItem(promise, onFulfilled, onRejected));
     } else {
       resolver = this.isFulfilled ? onFulfilled : onRejected;
-      promise._unwrap(resolver, this._result);
+      promise._unwrap(resolver, this);
     }
     return promise;
   },
   fail: function(onRejected) {
     return this.then(null, onRejected);
+  },
+  always: function(onResolved) {
+    var onFulfilled, onRejected, splice;
+    assertType(onResolved, Function);
+    splice = Array.prototype.splice;
+    onFulfilled = function() {
+      splice.call(arguments, 0, 0, null);
+      return onResolved.apply(null, arguments);
+    };
+    onRejected = function() {
+      splice.call(arguments, 1, 0, null);
+      return onResolved.apply(null, arguments);
+    };
+    return this.then(onFulfilled, onRejected);
+  },
+  inspect: function() {
+    return {
+      value: this._results[0],
+      state: this._state > 0 ? "fulfilled" : this._state < 0 ? "rejected" : "pending"
+    };
+  },
+  curry: function() {
+    var i, len, value;
+    for (i = 0, len = arguments.length; i < len; i++) {
+      value = arguments[i];
+      this._results.push(value);
+    }
   },
   _canResolve: function(onFulfilled, onRejected) {
     if (this.isFulfilled && !isType(onFulfilled, Function)) {
@@ -94,13 +123,14 @@ type.defineMethods({
     if (!this.isPending) {
       return;
     }
+    assert(!isType(value, Promise), "Cannot fulfill with a Promise as the result!");
     this._state = 1;
-    this._result = value;
+    this._results[0] = value;
     if (this._queue.length) {
       ref1 = this._queue;
       for (i = 0, len = ref1.length; i < len; i++) {
         item = ref1[i];
-        item.fulfill(value);
+        item.fulfill(this);
       }
     }
     this._queue = null;
@@ -110,15 +140,16 @@ type.defineMethods({
     if (!this.isPending) {
       return;
     }
+    assertType(error, Error.Kind);
     this._state = -1;
-    this._result = error;
-    if (isNodeJS && this._unhandled) {
+    this._results[0] = error;
+    if (this._unhandled) {
       immediate((function(_this) {
         return function() {
           if (!_this._unhandled) {
             return;
           }
-          return process.emit("unhandledRejection", error, _this);
+          return Promise._onUnhandledRejection(error, _this);
         };
       })(this));
     }
@@ -126,7 +157,7 @@ type.defineMethods({
       ref1 = this._queue;
       for (i = 0, len = ref1.length; i < len; i++) {
         item = ref1[i];
-        item.reject(error);
+        item.reject(this);
       }
     }
     this._queue = null;
@@ -147,6 +178,7 @@ type.defineMethods({
   },
   _tryResolving: function(resolver) {
     var error, reject, resolve;
+    assertType(resolver, Function);
     reject = bindMethod(this, "_reject");
     resolve = bindMethod(this, "_tryFulfilling");
     error = tryCatch(function() {
@@ -156,13 +188,34 @@ type.defineMethods({
       reject(error);
     }
   },
-  _unwrap: function(resolver, value) {
+  _unwrap: function(resolver, promise) {
+    var args, index, length;
+    assertType(resolver, Function.Maybe);
+    assertType(promise, Promise);
+    assert(!promise.isPending, "Promise must be resolved before unwrapping!");
+    args = promise._results;
+    length = args.length;
+    if (length > 1) {
+      index = 1;
+      while (index < length) {
+        this._results.push(args[index]);
+        index += 1;
+      }
+    }
+    if (!resolver) {
+      if (promise.isFulfilled) {
+        this._fulfill(args[0]);
+      } else {
+        this._reject(args[0]);
+      }
+      return;
+    }
     return immediate((function(_this) {
       return function() {
         var error, result;
         try {
-          result = resolver(value);
-          assert(result !== promise, "Cannot resolve a Promise with itself!");
+          result = resolver.apply(null, args);
+          assert(result !== _this, "Cannot resolve a Promise with itself!");
         } catch (error1) {
           error = error1;
           _this._reject(error);
@@ -244,28 +297,27 @@ type.defineStatics({
     };
   },
   all: function(array) {
-    var deferred, i, index, len, length, promise, reject, resolved, results, value;
+    var deferred, fulfill, i, index, len, length, reject, resolved, results, value;
     assertType(array, Array);
     length = array.length;
     if (!length) {
-      return Promise.resolve([]);
+      return Promise([]);
     }
+    resolved = 0;
+    results = new Array(length);
     deferred = Promise._defer();
     reject = bindMethod(deferred, "_reject");
-    results = new Array(length);
-    resolved = 0;
+    fulfill = function(result, index) {
+      resolved += 1;
+      results[index] = result;
+      if (resolved !== length) {
+        return;
+      }
+      return deferred._fulfill(results);
+    };
     for (index = i = 0, len = array.length; i < len; index = ++i) {
       value = array[index];
-      promise = Promise.resolve(value);
-      promise.fail(reject);
-      promise.then(function(result) {
-        resolved += 1;
-        results[index] = result;
-        if (resolved !== length) {
-          return;
-        }
-        return deferred._fulfill(results);
-      });
+      Promise(value).fail(reject).curry(index).then(fulfill);
     }
     return deferred;
   },
@@ -280,7 +332,8 @@ type.defineStatics({
   },
   _defer: function() {
     return Promise(void 0, true);
-  }
+  },
+  _onUnhandledRejection: emptyFunction
 });
 
 module.exports = Promise = type.build();

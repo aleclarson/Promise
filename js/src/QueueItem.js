@@ -12,30 +12,20 @@ type.argumentTypes = {
   onRejected: Function.Maybe
 };
 
-type.initInstance(function(promise, onFulfilled, onRejected) {
-  this.promise = promise;
-  if (isType(onFulfilled, Function)) {
-    this.onFulfilled = onFulfilled;
-    this.fulfill = this._resolveFulfilled;
-  }
-  if (isType(onRejected, Function)) {
-    this.onRejected = onRejected;
-    return this.reject = this._resolveRejected;
-  }
+type.createInstance(function(promise, onFulfilled, onRejected) {
+  return {
+    promise: promise,
+    onFulfilled: onFulfilled,
+    onRejected: onRejected
+  };
 });
 
 type.defineMethods({
-  fulfill: function(value) {
-    return this.promise._tryFulfilling(value);
+  fulfill: function(promise) {
+    return this.promise._unwrap(this.onFulfilled, promise);
   },
-  reject: function(error) {
-    return this.promise._reject(error);
-  },
-  _resolveFulfilled: function(value) {
-    return this.promise._unwrap(this.onFulfilled, value);
-  },
-  _resolveRejected: function(error) {
-    return this.promise._unwrap(this.onRejected, error);
+  reject: function(promise) {
+    return this.promise._unwrap(this.onRejected, promise);
   }
 });
 

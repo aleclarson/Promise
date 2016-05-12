@@ -1,10 +1,10 @@
 
-require "isNodeJS"
-
 { Any, isType, assert, assertType } = require "type-utils"
 
+emptyFunction = require "emptyFunction"
 bindMethod = require "bindMethod"
 immediate = require "immediate"
+sync = require "sync"
 Type = require "Type"
 
 QueueItem = require "./QueueItem"
@@ -22,13 +22,13 @@ type.defineValues
 
   _state: 0
 
-  _result: null
+  _unhandled: yes
 
-  _unhandled: yes if isNodeJS
+  _results: -> [ undefined ]
 
   _queue: -> []
 
-type.defineProperties
+type.definePrototype
 
   isFulfilled: get: ->
     @_state > 0
@@ -46,18 +46,53 @@ type.initInstance (value, isPending) ->
 type.defineMethods
 
   then: (onFulfilled, onRejected) ->
-    return this unless @_canResolve onFulfilled, onRejected
+
+    unless @_canResolve onFulfilled, onRejected
+      return this
+
+    @_unhandled = no
+
     promise = Promise._defer()
-    @_unhandled = no if isNodeJS
+
     if @isPending
-      @_queue.push QueueItem this, onFulfilled, onRejected
+      @_queue.push QueueItem promise, onFulfilled, onRejected
+
     else
       resolver = if @isFulfilled then onFulfilled else onRejected
-      promise._unwrap resolver, @_result
+      promise._unwrap resolver, this
+
     return promise
 
   fail: (onRejected) ->
     @then null, onRejected
+
+  always: (onResolved) ->
+
+    assertType onResolved, Function
+
+    splice = Array::splice
+
+    onFulfilled = ->
+      splice.call arguments, 0, 0, null
+      onResolved.apply null, arguments
+
+    onRejected = ->
+      splice.call arguments, 1, 0, null
+      onResolved.apply null, arguments
+
+    @then onFulfilled, onRejected
+
+  inspect: ->
+    value: @_results[0]
+    state:
+      if @_state > 0 then "fulfilled"
+      else if @_state < 0 then "rejected"
+      else "pending"
+
+  curry: ->
+    for value in arguments
+      @_results.push value
+    return
 
   # If the promise is fulfilled or rejected,
   # the opposite handler will never be called.
@@ -69,12 +104,15 @@ type.defineMethods
   _fulfill: (value) ->
 
     return unless @isPending
+
+    assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
+
     @_state = 1
-    @_result = value
+    @_results[0] = value
 
     if @_queue.length
       for item in @_queue
-        item.fulfill value
+        item.fulfill this
 
     @_queue = null
     return
@@ -82,17 +120,19 @@ type.defineMethods
   _reject: (error) ->
 
     return unless @isPending
-    @_state = -1
-    @_result = error
 
-    if isNodeJS and @_unhandled
-      immediate =>
-        return unless @_unhandled
-        process.emit "unhandledRejection", error, this
+    assertType error, Error.Kind
+
+    @_state = -1
+    @_results[0] = error
+
+    if @_unhandled then immediate =>
+      return unless @_unhandled
+      Promise._onUnhandledRejection error, this
 
     if @_queue.length
       for item in @_queue
-        item.reject error
+        item.reject this
 
     @_queue = null
     return
@@ -115,19 +155,43 @@ type.defineMethods
     return
 
   _tryResolving: (resolver) ->
+
+    assertType resolver, Function
+
     reject = bindMethod this, "_reject"
     resolve = bindMethod this, "_tryFulfilling"
-    { error } = tryCatch -> resolver resolve, reject
+
+    { error } = tryCatch ->
+      resolver resolve, reject
+
     reject error if error
     return
 
-  _unwrap: (resolver, value) ->
+  _unwrap: (resolver, promise) ->
+
+    assertType resolver, Function.Maybe
+    assertType promise, Promise
+    assert not promise.isPending, "Promise must be resolved before unwrapping!"
+
+    args = promise._results
+    length = args.length
+    if length > 1
+      index = 1
+      while index < length
+        @_results.push args[index]
+        index += 1
+
+    unless resolver
+      if promise.isFulfilled
+        @_fulfill args[0]
+      else @_reject args[0]
+      return
 
     immediate =>
 
       try
-        result = resolver value
-        assert result isnt promise, "Cannot resolve a Promise with itself!"
+        result = resolver.apply null, args
+        assert result isnt this, "Cannot resolve a Promise with itself!"
 
       catch error
         @_reject error
@@ -191,21 +255,29 @@ type.defineStatics
   # Waits for all values to be resolved.
   # Not a single value can be rejected.
   all: (array) ->
+
     assertType array, Array
+
     { length } = array
-    return Promise.resolve [] unless length
+    return Promise [] unless length
+
+    resolved = 0
+    results = new Array length
+
     deferred = Promise._defer()
     reject = bindMethod deferred, "_reject"
-    results = new Array length
-    resolved = 0
+    fulfill = (result, index) ->
+      resolved += 1
+      results[index] = result
+      return if resolved isnt length
+      deferred._fulfill results
+
     for value, index in array
-      promise = Promise.resolve value
-      promise.fail reject
-      promise.then (result) ->
-        resolved += 1
-        results[index] = result
-        return if resolved isnt length
-        deferred._fulfill results
+      Promise value
+        .fail reject
+        .curry index
+        .then fulfill
+
     return deferred
 
   # Iterate the (key, value) pairs of an Array or Object
@@ -217,8 +289,10 @@ type.defineStatics
       Promise.try -> iterator.call null, value, key
 
   # Create a pending Promise.
-  _defer: ->
-    Promise undefined, yes
+  _defer: -> Promise undefined, yes
+
+  # A hook for handling unhandled rejections.
+  _onUnhandledRejection: emptyFunction
 
 module.exports = Promise = type.build()
 

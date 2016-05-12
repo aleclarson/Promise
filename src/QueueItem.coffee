@@ -10,30 +10,15 @@ type.argumentTypes =
   onFulfilled: Function.Maybe
   onRejected: Function.Maybe
 
-type.initInstance (promise, onFulfilled, onRejected) ->
-
-  @promise = promise
-
-  if isType onFulfilled, Function
-    @onFulfilled = onFulfilled
-    @fulfill = @_resolveFulfilled
-
-  if isType onRejected, Function
-    @onRejected = onRejected
-    @reject = @_resolveRejected
+type.createInstance (promise, onFulfilled, onRejected) ->
+  { promise, onFulfilled, onRejected }
 
 type.defineMethods
 
-  fulfill: (value) ->
-    @promise._tryFulfilling value
+  fulfill: (promise) ->
+    @promise._unwrap @onFulfilled, promise
 
-  reject: (error) ->
-    @promise._reject error
-
-  _resolveFulfilled: (value) ->
-    @promise._unwrap @onFulfilled, value
-
-  _resolveRejected: (error) ->
-    @promise._unwrap @onRejected, error
+  reject: (promise) ->
+    @promise._unwrap @onRejected, promise
 
 module.exports = type.build()

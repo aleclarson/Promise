@@ -32,20 +32,64 @@ promise = Promise.try ->
   # for the Promise to be resolved, and then resolve the
   # Promise created by 'Promise.try'.
   #
+```
 
-# Wait until the Promise is fulfilled, then call this function.
-.then (result) ->
+### Promise::then(onFulfilled, onRejected)
+
+Wait until this `Promise` is resolve, then call `onFulfilled` if
+this `Promise` is fulfilled, or call `onRejected` if this `Promise` is rejected.
+
+Both `onFulfilled` and `onRejected` can be undefined, without an error being thrown.
+
+Only one of the passed functions will ever be called. If this `Promise` is never
+resolved, none of the passed functions will ever be called.
+
+```coffee
+promise.then (result) ->
   # Do something with the result!
 
-# Wait until the Promise is rejected, then call this function.
-# This argument is optional!
 , (error) ->
   # Handle the error in here.
+```
 
-# You can use 'promise.fail' as a shortcut
-# for 'promise.then(null, onRejected)'.
-.fail (error) ->
+### Promise::fail(onRejected)
+
+Wait until this `Promise` is rejected, then call the given `Function`.
+
+```coffee
+promise.fail (error) ->
   # Handle the error in here.
+```
+
+### Promise::always(onResolved)
+
+Wait until this `Promise` is resolved, then call the given `Function`.
+
+Unless this `Promise` is never resolved, the passed function will always be called!
+
+```coffee
+promise.always (error, result) ->
+  if error
+    # Handle the error in here.
+  else
+    # Do something with the result!
+```
+
+### Promise::curry(args...)
+
+Attach values to this `Promise` that will be passed on to every
+`Promise` that directly follows it.
+
+```coffee
+promise.curry 1, 2, 3
+promise.then (value, x, y, z) ->
+  # The 'value' is the result of 'promise'.
+  # The 'x', 'y', and 'z' arguments are from 'promise.curry'!
+promise.fail (error, x, y, z) ->
+  # Rejection handlers also get the arguments!
+.then (value, x, y, z) ->
+  # Curried values are passed down to every
+  # Promise that indirectly follows the curried Promise.
 ```
 
 ### Promise.reject(error)
