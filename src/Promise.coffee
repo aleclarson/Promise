@@ -1,11 +1,13 @@
 
-{ Any, isType, assert, assertType } = require "type-utils"
-
 emptyFunction = require "emptyFunction"
+assertType = require "assertType"
 bindMethod = require "bindMethod"
 immediate = require "immediate"
+isType = require "isType"
+assert = require "assert"
 sync = require "sync"
 Type = require "Type"
+Any = require "Any"
 
 QueueItem = require "./QueueItem"
 

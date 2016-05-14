@@ -1,6 +1,5 @@
 
-{ Shape } = require "type-utils"
-
+Shape = require "Shape"
 Type = require "Type"
 
 type = Type "QueueItem"

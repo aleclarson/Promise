@@ -1,16 +1,22 @@
-var Any, Promise, QueueItem, Type, assert, assertType, bindMethod, emptyFunction, getResolver, immediate, isType, ref, sync, tryCatch, type;
-
-ref = require("type-utils"), Any = ref.Any, isType = ref.isType, assert = ref.assert, assertType = ref.assertType;
+var Any, Promise, QueueItem, Type, assert, assertType, bindMethod, emptyFunction, getResolver, immediate, isType, sync, tryCatch, type;
 
 emptyFunction = require("emptyFunction");
+
+assertType = require("assertType");
 
 bindMethod = require("bindMethod");
 
 immediate = require("immediate");
 
+isType = require("isType");
+
+assert = require("assert");
+
 sync = require("sync");
 
 Type = require("Type");
+
+Any = require("Any");
 
 QueueItem = require("./QueueItem");
 
@@ -119,7 +125,7 @@ type.defineMethods({
     return true;
   },
   _fulfill: function(value) {
-    var i, item, len, ref1;
+    var i, item, len, ref;
     if (!this.isPending) {
       return;
     }
@@ -127,16 +133,16 @@ type.defineMethods({
     this._state = 1;
     this._results[0] = value;
     if (this._queue.length) {
-      ref1 = this._queue;
-      for (i = 0, len = ref1.length; i < len; i++) {
-        item = ref1[i];
+      ref = this._queue;
+      for (i = 0, len = ref.length; i < len; i++) {
+        item = ref[i];
         item.fulfill(this);
       }
     }
     this._queue = null;
   },
   _reject: function(error) {
-    var i, item, len, ref1;
+    var i, item, len, ref;
     if (!this.isPending) {
       return;
     }
@@ -154,9 +160,9 @@ type.defineMethods({
       })(this));
     }
     if (this._queue.length) {
-      ref1 = this._queue;
-      for (i = 0, len = ref1.length; i < len; i++) {
-        item = ref1[i];
+      ref = this._queue;
+      for (i = 0, len = ref.length; i < len; i++) {
+        item = ref[i];
         item.reject(this);
       }
     }

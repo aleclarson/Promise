@@ -1,6 +1,6 @@
 var Shape, Type, type;
 
-Shape = require("type-utils").Shape;
+Shape = require("Shape");
 
 Type = require("Type");
 
