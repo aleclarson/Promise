@@ -328,13 +328,20 @@ type.defineStatics({
     return deferred;
   },
   map: function(iterable, iterator) {
-    assertType(iterable, [Array, Object, null]);
     assertType(iterator, Function);
     return Promise.all(sync.map(iterable, function(value, key) {
       return Promise["try"](function() {
         return iterator.call(null, value, key);
       });
     }));
+  },
+  chain: function(iterable, iterator) {
+    assertType(iterator, Function);
+    return sync.reduce(iterable, Promise(), function(chain, value, key) {
+      return chain.then(function() {
+        return iterator.call(null, value, key);
+      });
+    });
   },
   _defer: function() {
     return Promise(void 0, true);

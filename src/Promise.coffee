@@ -285,10 +285,14 @@ type.defineStatics
   # Iterate the (key, value) pairs of an Array or Object
   # and wrap each iteration in a 'Promise.try' call.
   map: (iterable, iterator) ->
-    assertType iterable, [ Array, Object, null ]
     assertType iterator, Function
     Promise.all sync.map iterable, (value, key) ->
       Promise.try -> iterator.call null, value, key
+
+  chain: (iterable, iterator) ->
+    assertType iterator, Function
+    sync.reduce iterable, Promise(), (chain, value, key) ->
+      chain.then -> iterator.call null, value, key
 
   # Create a pending Promise.
   _defer: -> Promise undefined, yes

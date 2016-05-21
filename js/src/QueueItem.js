@@ -1,6 +1,6 @@
-var Shape, Type, type;
+var Type, getArgProp, type;
 
-Shape = require("Shape");
+getArgProp = require("getArgProp");
 
 Type = require("Type");
 
@@ -12,12 +12,10 @@ type.argumentTypes = {
   onRejected: Function.Maybe
 };
 
-type.createInstance(function(promise, onFulfilled, onRejected) {
-  return {
-    promise: promise,
-    onFulfilled: onFulfilled,
-    onRejected: onRejected
-  };
+type.defineValues({
+  promise: getArgProp(0),
+  onFulfilled: getArgProp(1),
+  onRejected: getArgProp(2)
 });
 
 type.defineMethods({

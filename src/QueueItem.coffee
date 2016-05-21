@@ -1,5 +1,5 @@
 
-Shape = require "Shape"
+getArgProp = require "getArgProp"
 Type = require "Type"
 
 type = Type "QueueItem"
@@ -9,8 +9,13 @@ type.argumentTypes =
   onFulfilled: Function.Maybe
   onRejected: Function.Maybe
 
-type.createInstance (promise, onFulfilled, onRejected) ->
-  { promise, onFulfilled, onRejected }
+type.defineValues
+
+  promise: getArgProp 0
+
+  onFulfilled: getArgProp 1
+
+  onRejected: getArgProp 2
 
 type.defineMethods
 

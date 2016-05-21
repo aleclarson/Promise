@@ -4,12 +4,12 @@
   "main": "js/src/Promise",
   "dependencies": {
     "Any": "aleclarson/Any#1.0.0",
-    "Shape": "aleclarson/Shape#1.0.0",
     "Type": "aleclarson/Type#1.0.0",
     "assert": "aleclarson/assert#1.0.0",
     "assertType": "aleclarson/assertType#1.0.0",
     "bindMethod": "aleclarson/bindMethod#1.0.0",
     "emptyFunction": "aleclarson/emptyFunction#1.0.0",
+    "getArgProp": "aleclarson/getArgProp#1.0.0",
     "immediate": "~3.0.5",
     "isType": "aleclarson/isType#1.0.0",
     "sync": "aleclarson/sync#1.0.0"
