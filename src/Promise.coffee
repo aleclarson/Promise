@@ -61,7 +61,7 @@ type.defineMethods
 
     else
       resolver = if @isFulfilled then onFulfilled else onRejected
-      promise._unwrap resolver, this
+      promise._unwrap this, resolver
 
     return promise
 
@@ -169,7 +169,7 @@ type.defineMethods
     reject error if error
     return
 
-  _unwrap: (resolver, promise) ->
+  _unwrap: (promise, resolver) ->
 
     assertType resolver, Function.Maybe
     assertType promise, Promise

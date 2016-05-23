@@ -81,7 +81,7 @@ type.defineMethods({
       this._queue.push(QueueItem(promise, onFulfilled, onRejected));
     } else {
       resolver = this.isFulfilled ? onFulfilled : onRejected;
-      promise._unwrap(resolver, this);
+      promise._unwrap(this, resolver);
     }
     return promise;
   },
@@ -194,7 +194,7 @@ type.defineMethods({
       reject(error);
     }
   },
-  _unwrap: function(resolver, promise) {
+  _unwrap: function(promise, resolver) {
     var args, index, length;
     assertType(resolver, Function.Maybe);
     assertType(promise, Promise);

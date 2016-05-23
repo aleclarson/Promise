@@ -20,10 +20,10 @@ type.defineValues({
 
 type.defineMethods({
   fulfill: function(promise) {
-    return this.promise._unwrap(this.onFulfilled, promise);
+    return this.promise._unwrap(promise, this.onFulfilled);
   },
   reject: function(promise) {
-    return this.promise._unwrap(this.onRejected, promise);
+    return this.promise._unwrap(promise, this.onRejected);
   }
 });
 

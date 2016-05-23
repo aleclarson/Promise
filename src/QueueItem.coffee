@@ -20,9 +20,9 @@ type.defineValues
 type.defineMethods
 
   fulfill: (promise) ->
-    @promise._unwrap @onFulfilled, promise
+    @promise._unwrap promise, @onFulfilled
 
   reject: (promise) ->
-    @promise._unwrap @onRejected, promise
+    @promise._unwrap promise, @onRejected
 
 module.exports = type.build()
