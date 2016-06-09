@@ -23,6 +23,8 @@ promise.isRejected
 
 Call a `Function` safely and resolve its result into a `Promise`.
 
+It's guaranteed that `func` won't be called until the next event loop tick.
+
 ```coffee
 promise = Promise.try ->
   #
@@ -115,6 +117,20 @@ The new `Promise` will remain pending until one of the functions is called.
 ```coffee
 promise = Promise.resolve (resolve, reject) ->
   # Do something here.
+```
+
+### Promise.defer()
+
+Create a pending `Promise` that is resolved manually.
+
+Returns an object literal that looks like:
+
+```coffee
+deferred = {
+  promise # A new Promise!
+  resolve # A bound function that resolves the new Promise.
+  reject  # A bound function that rejects the new Promise.
+}
 ```
 
 ### Promise.wrap(func)

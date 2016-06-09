@@ -3,6 +3,7 @@ emptyFunction = require "emptyFunction"
 assertType = require "assertType"
 bindMethod = require "bindMethod"
 immediate = require "immediate"
+Tracer = require "Tracer"
 isType = require "isType"
 assert = require "assert"
 sync = require "sync"
@@ -30,6 +31,8 @@ type.defineValues
 
   _queue: -> []
 
+  _trace: -> null if isDev
+
 type.definePrototype
 
   isFulfilled: get: ->
@@ -42,31 +45,29 @@ type.definePrototype
     @_state is 0
 
 type.initInstance (value, isPending) ->
-  return if isPending
-  @_tryFulfilling value
+
+  if not isPending
+    @_tryFulfilling value
 
 type.defineMethods
 
   then: (onFulfilled, onRejected) ->
 
-    unless @_canResolve onFulfilled, onRejected
+    assertType onFulfilled, Function.Maybe
+    assertType onRejected, Function.Maybe
+
+    if not @_canResolve onFulfilled, onRejected
       return this
 
-    @_unhandled = no
-
     promise = Promise._defer()
-
-    if @isPending
-      @_queue.push QueueItem promise, onFulfilled, onRejected
-
-    else
-      resolver = if @isFulfilled then onFulfilled else onRejected
-      promise._unwrap this, resolver
-
+    @_then promise, onFulfilled, onRejected
     return promise
 
   fail: (onRejected) ->
-    @then null, onRejected
+    assertType onRejected, Function.Maybe
+    promise = Promise._defer()
+    @_then promise, undefined, onRejected
+    return promise
 
   always: (onResolved) ->
 
@@ -75,14 +76,29 @@ type.defineMethods
     splice = Array::splice
 
     onFulfilled = ->
-      splice.call arguments, 0, 0, null
+      splice.call arguments, 0, 0, null # Set 'error' to null
       onResolved.apply null, arguments
 
     onRejected = ->
-      splice.call arguments, 1, 0, null
+      splice.call arguments, 1, 0, null # Set 'result' to null
       onResolved.apply null, arguments
 
-    @then onFulfilled, onRejected
+    promise = Promise._defer()
+    @_then promise, onFulfilled, onRejected
+    return promise
+
+  curry: ->
+
+    # Create a new Promise that does nothing with the error or result.
+    promise = @always (error, result) ->
+      throw error if error
+      return result
+
+    # Add the arguments to the results of the new Promise.
+    for value in arguments
+      promise._results.push value
+
+    return promise
 
   inspect: ->
     value: @_results[0]
@@ -91,21 +107,11 @@ type.defineMethods
       else if @_state < 0 then "rejected"
       else "pending"
 
-  curry: ->
-    for value in arguments
-      @_results.push value
-    return
-
-  # If the promise is fulfilled or rejected,
-  # the opposite handler will never be called.
-  _canResolve: (onFulfilled, onRejected) ->
-    return no if @isFulfilled and not isType onFulfilled, Function
-    return no if @isRejected and not isType onRejected, Function
-    return yes
-
+  # Must never be passed a Promise.
+  # Fails gracefully if 'this.isPending' is false.
   _fulfill: (value) ->
 
-    return unless @isPending
+    return if not @isPending
 
     assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
 
@@ -119,9 +125,11 @@ type.defineMethods
     @_queue = null
     return
 
+  # Must be passed an instanceof Error.
+  # Fails gracefully if 'this.isPending' is false.
   _reject: (error) ->
 
-    return unless @isPending
+    return if not @isPending
 
     assertType error, Error.Kind
 
@@ -129,7 +137,7 @@ type.defineMethods
     @_results[0] = error
 
     if @_unhandled then immediate =>
-      return unless @_unhandled
+      return if not @_unhandled
       Promise._onUnhandledRejection error, this
 
     if @_queue.length
@@ -139,7 +147,32 @@ type.defineMethods
     @_queue = null
     return
 
+  # Wait until the given 'resolver' has a result that isn't a pending Promise.
+  # The given 'results' are applied to the 'resolver'.
+  _resolve: (results, resolver) ->
+
+    assertType results, Array
+    assertType resolver, Function
+
+    try
+      result = resolver.apply null, results
+      assert result isnt this, "Cannot resolve a Promise with itself!"
+
+    catch error
+      @_reject error
+      return
+
+    @_tryFulfilling result
+    return
+
+  # If a promise is passed, calls its 'then' method.
+  # Otherwise, fulfill this with 'value'.
   _tryFulfilling: (value) ->
+
+    # Attach this Promise directly to the given Promise.
+    if isType value, Promise
+      value._then this
+      return
 
     # Check for a thenable value.
     result = tryCatch getResolver, value
@@ -148,6 +181,8 @@ type.defineMethods
       @_reject result.error
       return
 
+    # If 'value' has a 'then' method, it is
+    # passed into 'this._tryResolving'!
     resolver = result.value
     if resolver
       @_tryResolving resolver
@@ -156,6 +191,9 @@ type.defineMethods
     @_fulfill value
     return
 
+  # Passes 'resolve' and 'reject' to the given 'resolver'.
+  # Any errors thrown by 'resolver' are passed to 'reject'.
+  # Must call 'resolve' to fulfill this promise.
   _tryResolving: (resolver) ->
 
     assertType resolver, Function
@@ -169,51 +207,85 @@ type.defineMethods
     reject error if error
     return
 
-  _unwrap: (promise, resolver) ->
+  # If the promise is fulfilled or rejected,
+  # the opposite handler will never be called.
+  _canResolve: (onFulfilled, onRejected) ->
+    return no if @isFulfilled and not isType onFulfilled, Function
+    return no if @isRejected and not isType onRejected, Function
+    return yes
 
-    assertType resolver, Function.Maybe
-    assertType promise, Promise
-    assert not promise.isPending, "Promise must be resolved before unwrapping!"
+  # This is similar to `this.then()`
+  # but the Promise must be passed in.
+  _then: (promise, onFulfilled, onRejected) ->
 
-    args = promise._results
-    length = args.length
-    if length > 1
-      index = 1
-      while index < length
-        @_results.push args[index]
-        index += 1
+    @_unhandled = no
 
-    unless resolver
-      if promise.isFulfilled
-        @_fulfill args[0]
-      else @_reject args[0]
+    if @isPending
+      @_queue.push QueueItem promise, onFulfilled, onRejected
       return
 
+    if @isFulfilled
+      @_thenResolve promise, onFulfilled
+      return
+
+    @_thenResolve promise, onRejected
+    return
+
+  # Use this Promise to resolve the given Promise.
+  # The 'resolver' is an optional Function.
+  _thenResolve: (promise, resolver) ->
+
+    assertType promise, Promise
+    assertType resolver, Function.Maybe
+
+    assert not @isPending, "This promise must be resolved before notifying the next promise!"
+
+    if isDev
+      promise._trace = Tracer "Promise::_thenResolve()"
+
     immediate =>
+      results = @_results
+      promise._inheritResults results
 
-      try
-        result = resolver.apply null, args
-        assert result isnt this, "Cannot resolve a Promise with itself!"
-
-      catch error
-        @_reject error
+      if resolver
+        promise._resolve results, resolver
         return
 
-      @_tryFulfilling result
+      if @isFulfilled
+        promise._fulfill results[0]
+        return
+
+      promise._reject results[0]
+      return
+
+  # Inherits every result (except for the first one).
+  _inheritResults: (results) ->
+    { length } = results
+    return if length <= 1
+    index = 1
+    while index < length
+      @_results.push results[index]
+      index += 1
+    return
 
 type.defineStatics
 
   isFulfilled: (value) ->
-    return no unless isType value, Promise
+    return no if not isType value, Promise
     return value.isFulfilled
 
   isRejected: (value) ->
-    return yes unless isType value, Promise
+    return yes if not isType value, Promise
     return value.isRejected
 
   isPending: (value) ->
-    return no unless isType value, Promise
+    return no if not isType value, Promise
     return value.isPending
+
+  defer: ->
+    promise: promise = Promise._defer()
+    resolve: (result) -> promise._tryFulfilling result
+    reject: (error) -> promise._reject error
 
   resolve: (resolver) ->
     assertType resolver, Function
@@ -227,13 +299,13 @@ type.defineStatics
     promise._reject error
     return promise
 
-  try: (resolver) ->
-    assertType resolver, Function
+  try: (func) ->
+    assertType func, Function
     promise = Promise._defer()
-    promise._fulfill()
-    return promise.then resolver
+    promise._trace = Tracer "Promise.try()" if isDev
+    immediate => promise._resolve [], func
+    return promise
 
-  # Wraps a function in a 'Promise.try' call.
   wrap: (func) ->
     assertType func, Function
     return ->
@@ -242,26 +314,24 @@ type.defineStatics
       Promise.try ->
         func.apply self, args
 
-  # Converts an (error, result) callback into a Promise.
   ify: (func) ->
     assertType func, Function
     push = Array::push
     return ->
       deferred = Promise._defer()
-      push.call args, (error, result) ->
+      push.call arguments, (error, result) ->
         if error then deferred._reject error
         else deferred._fulfill result
-      func.apply this, args
+      func.apply this, arguments
       return deferred
 
-  # Waits for all values to be resolved.
-  # Not a single value can be rejected.
   all: (array) ->
 
     assertType array, Array
 
     { length } = array
-    return Promise [] unless length
+    if not length
+      return Promise []
 
     resolved = 0
     results = new Array length
@@ -274,20 +344,20 @@ type.defineStatics
       return if resolved isnt length
       deferred._fulfill results
 
-    for value, index in array
-      Promise value
+    index = -1
+    while ++index < length
+      Promise array[index]
         .fail reject
         .curry index
         .then fulfill
 
     return deferred
 
-  # Iterate the (key, value) pairs of an Array or Object
-  # and wrap each iteration in a 'Promise.try' call.
   map: (iterable, iterator) ->
     assertType iterator, Function
-    Promise.all sync.map iterable, (value, key) ->
-      Promise.try -> iterator.call null, value, key
+    Promise.all sync.reduce iterable, [], (promises, value, key) ->
+      promises.push Promise.try -> iterator.call null, value, key
+      return promises
 
   chain: (iterable, iterator) ->
     assertType iterator, Function

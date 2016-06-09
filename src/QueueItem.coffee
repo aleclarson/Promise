@@ -1,5 +1,6 @@
 
 getArgProp = require "getArgProp"
+assert = require "assert"
 Type = require "Type"
 
 type = Type "QueueItem"
@@ -20,9 +21,17 @@ type.defineValues
 type.defineMethods
 
   fulfill: (promise) ->
-    @promise._unwrap promise, @onFulfilled
+    assert promise.isFulfilled, "'promise' must be fulfilled!"
+    next = @promise
+    return if not next.isPending
+    promise._thenResolve next, @onFulfilled
+    return
 
   reject: (promise) ->
-    @promise._unwrap promise, @onRejected
+    assert promise.isRejected, "'promise' must be rejected!"
+    next = @promise
+    return if not next.isPending
+    promise._thenResolve next, @onRejected
+    return
 
 module.exports = type.build()

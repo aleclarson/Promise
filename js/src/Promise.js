@@ -1,4 +1,4 @@
-var Any, Promise, QueueItem, Type, assert, assertType, bindMethod, emptyFunction, getResolver, immediate, isType, sync, tryCatch, type;
+var Any, Promise, QueueItem, Tracer, Type, assert, assertType, bindMethod, emptyFunction, getResolver, immediate, isType, sync, tryCatch, type;
 
 emptyFunction = require("emptyFunction");
 
@@ -7,6 +7,8 @@ assertType = require("assertType");
 bindMethod = require("bindMethod");
 
 immediate = require("immediate");
+
+Tracer = require("Tracer");
 
 isType = require("isType");
 
@@ -41,6 +43,11 @@ type.defineValues({
   },
   _queue: function() {
     return [];
+  },
+  _trace: function() {
+    if (isDev) {
+      return null;
+    }
   }
 });
 
@@ -63,33 +70,32 @@ type.definePrototype({
 });
 
 type.initInstance(function(value, isPending) {
-  if (isPending) {
-    return;
+  if (!isPending) {
+    return this._tryFulfilling(value);
   }
-  return this._tryFulfilling(value);
 });
 
 type.defineMethods({
   then: function(onFulfilled, onRejected) {
-    var promise, resolver;
+    var promise;
+    assertType(onFulfilled, Function.Maybe);
+    assertType(onRejected, Function.Maybe);
     if (!this._canResolve(onFulfilled, onRejected)) {
       return this;
     }
-    this._unhandled = false;
     promise = Promise._defer();
-    if (this.isPending) {
-      this._queue.push(QueueItem(promise, onFulfilled, onRejected));
-    } else {
-      resolver = this.isFulfilled ? onFulfilled : onRejected;
-      promise._unwrap(this, resolver);
-    }
+    this._then(promise, onFulfilled, onRejected);
     return promise;
   },
   fail: function(onRejected) {
-    return this.then(null, onRejected);
+    var promise;
+    assertType(onRejected, Function.Maybe);
+    promise = Promise._defer();
+    this._then(promise, void 0, onRejected);
+    return promise;
   },
   always: function(onResolved) {
-    var onFulfilled, onRejected, splice;
+    var onFulfilled, onRejected, promise, splice;
     assertType(onResolved, Function);
     splice = Array.prototype.splice;
     onFulfilled = function() {
@@ -100,29 +106,29 @@ type.defineMethods({
       splice.call(arguments, 1, 0, null);
       return onResolved.apply(null, arguments);
     };
-    return this.then(onFulfilled, onRejected);
+    promise = Promise._defer();
+    this._then(promise, onFulfilled, onRejected);
+    return promise;
+  },
+  curry: function() {
+    var i, len, promise, value;
+    promise = this.always(function(error, result) {
+      if (error) {
+        throw error;
+      }
+      return result;
+    });
+    for (i = 0, len = arguments.length; i < len; i++) {
+      value = arguments[i];
+      promise._results.push(value);
+    }
+    return promise;
   },
   inspect: function() {
     return {
       value: this._results[0],
       state: this._state > 0 ? "fulfilled" : this._state < 0 ? "rejected" : "pending"
     };
-  },
-  curry: function() {
-    var i, len, value;
-    for (i = 0, len = arguments.length; i < len; i++) {
-      value = arguments[i];
-      this._results.push(value);
-    }
-  },
-  _canResolve: function(onFulfilled, onRejected) {
-    if (this.isFulfilled && !isType(onFulfilled, Function)) {
-      return false;
-    }
-    if (this.isRejected && !isType(onRejected, Function)) {
-      return false;
-    }
-    return true;
   },
   _fulfill: function(value) {
     var i, item, len, ref;
@@ -168,8 +174,26 @@ type.defineMethods({
     }
     this._queue = null;
   },
+  _resolve: function(results, resolver) {
+    var error, result;
+    assertType(results, Array);
+    assertType(resolver, Function);
+    try {
+      result = resolver.apply(null, results);
+      assert(result !== this, "Cannot resolve a Promise with itself!");
+    } catch (error1) {
+      error = error1;
+      this._reject(error);
+      return;
+    }
+    this._tryFulfilling(result);
+  },
   _tryFulfilling: function(value) {
     var resolver, result;
+    if (isType(value, Promise)) {
+      value._then(this);
+      return;
+    }
     result = tryCatch(getResolver, value);
     if (result.error) {
       this._reject(result.error);
@@ -194,42 +218,62 @@ type.defineMethods({
       reject(error);
     }
   },
-  _unwrap: function(promise, resolver) {
-    var args, index, length;
-    assertType(resolver, Function.Maybe);
-    assertType(promise, Promise);
-    assert(!promise.isPending, "Promise must be resolved before unwrapping!");
-    args = promise._results;
-    length = args.length;
-    if (length > 1) {
-      index = 1;
-      while (index < length) {
-        this._results.push(args[index]);
-        index += 1;
-      }
+  _canResolve: function(onFulfilled, onRejected) {
+    if (this.isFulfilled && !isType(onFulfilled, Function)) {
+      return false;
     }
-    if (!resolver) {
-      if (promise.isFulfilled) {
-        this._fulfill(args[0]);
-      } else {
-        this._reject(args[0]);
-      }
+    if (this.isRejected && !isType(onRejected, Function)) {
+      return false;
+    }
+    return true;
+  },
+  _then: function(promise, onFulfilled, onRejected) {
+    this._unhandled = false;
+    if (this.isPending) {
+      this._queue.push(QueueItem(promise, onFulfilled, onRejected));
       return;
+    }
+    if (this.isFulfilled) {
+      this._thenResolve(promise, onFulfilled);
+      return;
+    }
+    this._thenResolve(promise, onRejected);
+  },
+  _thenResolve: function(promise, resolver) {
+    assertType(promise, Promise);
+    assertType(resolver, Function.Maybe);
+    assert(!this.isPending, "This promise must be resolved before notifying the next promise!");
+    if (isDev) {
+      promise._trace = Tracer("Promise::_thenResolve()");
     }
     return immediate((function(_this) {
       return function() {
-        var error, result;
-        try {
-          result = resolver.apply(null, args);
-          assert(result !== _this, "Cannot resolve a Promise with itself!");
-        } catch (error1) {
-          error = error1;
-          _this._reject(error);
+        var results;
+        results = _this._results;
+        promise._inheritResults(results);
+        if (resolver) {
+          promise._resolve(results, resolver);
           return;
         }
-        return _this._tryFulfilling(result);
+        if (_this.isFulfilled) {
+          promise._fulfill(results[0]);
+          return;
+        }
+        promise._reject(results[0]);
       };
     })(this));
+  },
+  _inheritResults: function(results) {
+    var index, length;
+    length = results.length;
+    if (length <= 1) {
+      return;
+    }
+    index = 1;
+    while (index < length) {
+      this._results.push(results[index]);
+      index += 1;
+    }
   }
 });
 
@@ -252,6 +296,18 @@ type.defineStatics({
     }
     return value.isPending;
   },
+  defer: function() {
+    var promise;
+    return {
+      promise: promise = Promise._defer(),
+      resolve: function(result) {
+        return promise._tryFulfilling(result);
+      },
+      reject: function(error) {
+        return promise._reject(error);
+      }
+    };
+  },
   resolve: function(resolver) {
     var promise;
     assertType(resolver, Function);
@@ -266,12 +322,19 @@ type.defineStatics({
     promise._reject(error);
     return promise;
   },
-  "try": function(resolver) {
+  "try": function(func) {
     var promise;
-    assertType(resolver, Function);
+    assertType(func, Function);
     promise = Promise._defer();
-    promise._fulfill();
-    return promise.then(resolver);
+    if (isDev) {
+      promise._trace = Tracer("Promise.try()");
+    }
+    immediate((function(_this) {
+      return function() {
+        return promise._resolve([], func);
+      };
+    })(this));
+    return promise;
   },
   wrap: function(func) {
     assertType(func, Function);
@@ -291,19 +354,19 @@ type.defineStatics({
     return function() {
       var deferred;
       deferred = Promise._defer();
-      push.call(args, function(error, result) {
+      push.call(arguments, function(error, result) {
         if (error) {
           return deferred._reject(error);
         } else {
           return deferred._fulfill(result);
         }
       });
-      func.apply(this, args);
+      func.apply(this, arguments);
       return deferred;
     };
   },
   all: function(array) {
-    var deferred, fulfill, i, index, len, length, reject, resolved, results, value;
+    var deferred, fulfill, index, length, reject, resolved, results;
     assertType(array, Array);
     length = array.length;
     if (!length) {
@@ -321,18 +384,19 @@ type.defineStatics({
       }
       return deferred._fulfill(results);
     };
-    for (index = i = 0, len = array.length; i < len; index = ++i) {
-      value = array[index];
-      Promise(value).fail(reject).curry(index).then(fulfill);
+    index = -1;
+    while (++index < length) {
+      Promise(array[index]).fail(reject).curry(index).then(fulfill);
     }
     return deferred;
   },
   map: function(iterable, iterator) {
     assertType(iterator, Function);
-    return Promise.all(sync.map(iterable, function(value, key) {
-      return Promise["try"](function() {
+    return Promise.all(sync.reduce(iterable, [], function(promises, value, key) {
+      promises.push(Promise["try"](function() {
         return iterator.call(null, value, key);
-      });
+      }));
+      return promises;
     }));
   },
   chain: function(iterable, iterator) {

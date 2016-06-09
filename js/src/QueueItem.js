@@ -1,6 +1,8 @@
-var Type, getArgProp, type;
+var Type, assert, getArgProp, type;
 
 getArgProp = require("getArgProp");
+
+assert = require("assert");
 
 Type = require("Type");
 
@@ -20,10 +22,22 @@ type.defineValues({
 
 type.defineMethods({
   fulfill: function(promise) {
-    return this.promise._unwrap(promise, this.onFulfilled);
+    var next;
+    assert(promise.isFulfilled, "'promise' must be fulfilled!");
+    next = this.promise;
+    if (!next.isPending) {
+      return;
+    }
+    promise._thenResolve(next, this.onFulfilled);
   },
   reject: function(promise) {
-    return this.promise._unwrap(promise, this.onRejected);
+    var next;
+    assert(promise.isRejected, "'promise' must be rejected!");
+    next = this.promise;
+    if (!next.isPending) {
+      return;
+    }
+    promise._thenResolve(next, this.onRejected);
   }
 });
 
