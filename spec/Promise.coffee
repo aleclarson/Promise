@@ -8,14 +8,14 @@ Promise = require "../src/Promise"
 
 describe "Promise(value)", ->
 
-  it "returns a new Promise that is fulfilled with 'value'", ->
+  it "returns a new Promise that is fulfilled with `value`", ->
     foo = Promise 1
     expect foo._results[0]
       .toBe 1
 
-  describe "but if 'value' is a Promise", ->
+  describe "but if `value` is a Promise", ->
 
-    it "simply returns the 'value'", ->
+    it "simply returns the `value`", ->
       foo = Promise()
       bar = Promise foo
       expect foo
@@ -23,19 +23,24 @@ describe "Promise(value)", ->
 
 describe "Promise.reject(error)", ->
 
-  it "returns a new Promise that is rejected with 'error'", ->
+  it "returns a new Promise that is rejected with `error`", ->
+
     error = Error "foo threw!"
     foo = Promise.reject error
+
+    # Prevent reporting.
+    foo._unhandled = no
+
     expect foo._results[0]
       .toBe error
 
-  it "throws if 'error' is not an instanceof Error", ->
+  it "throws if `error` is not an instanceof Error", ->
     expect -> Promise.reject null
       .toThrowError "Expected a kind of Error!"
 
 describe "Promise.defer()", ->
 
-  it "returns an object with 'promise', 'resolve', and 'reject' keys", ->
+  it "returns an object with `promise`, `resolve`, and `reject` keys", ->
     deferred = Promise.defer()
     expect Object.keys(deferred)
       .toEqual [ "promise", "resolve", "reject" ]
@@ -49,13 +54,13 @@ describe "Promise.defer()", ->
 
   describe "deferred.resolve(value)", ->
 
-    it "fulfills 'deferred.promise' with 'value'", ->
+    it "fulfills `deferred.promise` with `value`", ->
       deferred = Promise.defer()
       deferred.resolve 1
       expect deferred.promise._results[0]
         .toBe 1
 
-    describe "but if 'value' is a Promise", ->
+    describe "but if `value` is a Promise", ->
 
       it "waits until the promise is fulfilled", (done) ->
         foo = Promise.defer()
@@ -94,6 +99,9 @@ describe "Promise.defer()", ->
         error = Error "foo threw!"
         foo.reject error
 
+        # Prevent reporting.
+        bar.promise._unhandled = no
+
         immediate ->
 
           expect bar.promise.isRejected
@@ -106,11 +114,11 @@ describe "Promise.defer()", ->
 
 describe "Promise.resolve(resolver)", ->
 
-  it "expects 'resolver' to be a Function", ->
+  it "expects `resolver` to be a Function", ->
     expect -> Promise.resolve null
       .toThrowError "Expected a Function!"
 
-  it "passes the 'resolve' and 'reject' functions to 'resolver'", (done) ->
+  it "passes the `resolve` and `reject` functions to `resolver`", (done) ->
 
     Promise.resolve (resolve, reject) ->
 
@@ -122,7 +130,7 @@ describe "Promise.resolve(resolver)", ->
 
       done()
 
-  it "creates a Promise that is resolved by the 'resolver'", (done) ->
+  it "creates a Promise that is resolved by the `resolver`", (done) ->
 
     promise = Promise.resolve (resolve) -> resolve 1
 
@@ -143,6 +151,9 @@ describe "Promise.try(func)", ->
     error = Error "test"
     promise = Promise.try ->
       throw error
+
+    # Prevent reporting.
+    promise._unhandled = no
 
     immediate ->
 
@@ -213,6 +224,9 @@ describe "Promise.wrap(func)", ->
     func = Promise.wrap -> throw error
     promise = func()
 
+    # Prevent reporting.
+    promise._unhandled = no
+
     immediate ->
 
       expect promise._results[0]
@@ -258,6 +272,9 @@ describe "Promise.ify(func)", ->
 
     promise = func()
 
+    # Prevent reporting.
+    promise._unhandled = no
+
     immediate ->
 
       expect promise._results[0]
@@ -299,6 +316,9 @@ describe "Promise.all(array)", ->
 
     error = Error "test"
     bar.reject error
+
+    # Prevent reporting.
+    bar._unhandled = no
 
   it "allows non-Promise values in `array`", (done) ->
 
@@ -377,3 +397,68 @@ describe "Promise.chain(array)", ->
       return deferred.promise
 
     .then -> done()
+
+describe "promise.then(onFulfilled, onRejected)", ->
+
+describe "promise.always(onResolved)", ->
+
+  it "inherits the error of `this` when it's rejected", (done) ->
+
+    foo = Promise.reject Error "foo threw!"
+
+    bar = foo.always (error, result) ->
+
+      expect error
+        .toBe foo._results[0]
+
+      expect result
+        .toBe null
+
+      throw Error "bar threw!"
+
+    bar.fail (error) ->
+
+      expect error
+        .toBe foo._results[0]
+
+      done()
+
+  it "inherits the result of `this` when it's fulfilled", (done) ->
+
+    foo = Promise 1
+    bar = foo.always (error, result) ->
+
+      expect error
+        .toBe null
+
+      expect result
+        .toBe foo._results[0]
+
+      return 2
+
+    bar.then ->
+
+      expect arguments[0]
+        .toBe foo._results[0]
+
+      done()
+
+describe "promise.curry(args...)", ->
+
+  it "attaches results onto a new Promise", (done) ->
+
+    foo = Promise 1
+    bar = foo.curry 2, 3
+
+    expect bar
+      .not.toBe foo
+
+    expect bar._results
+      .toEqual [ undefined ]
+
+    bar.then ->
+
+      expect bar._results
+        .toEqual [ 1, 2, 3 ]
+
+      done()

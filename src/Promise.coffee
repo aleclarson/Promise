@@ -1,5 +1,6 @@
 
 emptyFunction = require "emptyFunction"
+spliceArray = require "spliceArray"
 assertType = require "assertType"
 bindMethod = require "bindMethod"
 immediate = require "immediate"
@@ -9,6 +10,7 @@ assert = require "assert"
 sync = require "sync"
 Type = require "Type"
 Any = require "Any"
+has = require "has"
 
 QueueItem = require "./QueueItem"
 
@@ -73,39 +75,38 @@ type.defineMethods
 
     assertType onResolved, Function
 
-    splice = Array::splice
+    promise = Promise._defer()
 
     onFulfilled = ->
-      splice.call arguments, 0, 0, null # Set 'error' to null
-      onResolved.apply null, arguments
+      spliceArray arguments, 0, 0, null     # Set 'error' to null
+      try onResolved.apply null, arguments  # Ignore errors from 'onResolved'
+      return arguments[1]                   # Return the 'result'
 
     onRejected = ->
-      splice.call arguments, 1, 0, null # Set 'result' to null
-      onResolved.apply null, arguments
+      spliceArray arguments, 1, 0, null     # Set 'result' to null
+      try onResolved.apply null, arguments  # Ignore errors from 'onResolved'
+      throw arguments[0]                    # Rethrow the 'error'
 
-    promise = Promise._defer()
     @_then promise, onFulfilled, onRejected
     return promise
 
   curry: ->
-
-    # Create a new Promise that does nothing with the error or result.
-    promise = @always (error, result) ->
-      throw error if error
-      return result
-
-    # Add the arguments to the results of the new Promise.
-    for value in arguments
-      promise._results.push value
-
-    return promise
+    args = arguments
+    return promise = @always ->
+      for value in args
+        promise._results.push value
+      return
 
   inspect: ->
-    value: @_results[0]
+
     state:
       if @_state > 0 then "fulfilled"
       else if @_state < 0 then "rejected"
       else "pending"
+
+    value: @_results[0]
+
+    meta: @_results.slice 1
 
   # Must never be passed a Promise.
   # Fails gracefully if 'this.isPending' is false.
@@ -333,23 +334,23 @@ type.defineStatics
     if not length
       return Promise []
 
-    resolved = 0
     results = new Array length
+    remaining = length
 
     deferred = Promise._defer()
+
     reject = bindMethod deferred, "_reject"
     fulfill = (result, index) ->
-      resolved += 1
+      assert not has(results, index), "Cannot fulfill more than once!"
       results[index] = result
-      return if resolved isnt length
-      deferred._fulfill results
+      unless --remaining
+        deferred._fulfill results
 
     index = -1
     while ++index < length
       Promise array[index]
-        .fail reject
         .curry index
-        .then fulfill
+        .then fulfill, reject
 
     return deferred
 

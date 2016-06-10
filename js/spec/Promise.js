@@ -7,13 +7,13 @@ getType = require("getType");
 Promise = require("../src/Promise");
 
 describe("Promise(value)", function() {
-  it("returns a new Promise that is fulfilled with 'value'", function() {
+  it("returns a new Promise that is fulfilled with `value`", function() {
     var foo;
     foo = Promise(1);
     return expect(foo._results[0]).toBe(1);
   });
-  return describe("but if 'value' is a Promise", function() {
-    return it("simply returns the 'value'", function() {
+  return describe("but if `value` is a Promise", function() {
+    return it("simply returns the `value`", function() {
       var bar, foo;
       foo = Promise();
       bar = Promise(foo);
@@ -23,13 +23,14 @@ describe("Promise(value)", function() {
 });
 
 describe("Promise.reject(error)", function() {
-  it("returns a new Promise that is rejected with 'error'", function() {
+  it("returns a new Promise that is rejected with `error`", function() {
     var error, foo;
     error = Error("foo threw!");
     foo = Promise.reject(error);
+    foo._unhandled = false;
     return expect(foo._results[0]).toBe(error);
   });
-  return it("throws if 'error' is not an instanceof Error", function() {
+  return it("throws if `error` is not an instanceof Error", function() {
     return expect(function() {
       return Promise.reject(null);
     }).toThrowError("Expected a kind of Error!");
@@ -37,7 +38,7 @@ describe("Promise.reject(error)", function() {
 });
 
 describe("Promise.defer()", function() {
-  it("returns an object with 'promise', 'resolve', and 'reject' keys", function() {
+  it("returns an object with `promise`, `resolve`, and `reject` keys", function() {
     var deferred;
     deferred = Promise.defer();
     return expect(Object.keys(deferred)).toEqual(["promise", "resolve", "reject"]);
@@ -49,13 +50,13 @@ describe("Promise.defer()", function() {
     return expect(deferred.promise.isPending).toBe(true);
   });
   return describe("deferred.resolve(value)", function() {
-    it("fulfills 'deferred.promise' with 'value'", function() {
+    it("fulfills `deferred.promise` with `value`", function() {
       var deferred;
       deferred = Promise.defer();
       deferred.resolve(1);
       return expect(deferred.promise._results[0]).toBe(1);
     });
-    return describe("but if 'value' is a Promise", function() {
+    return describe("but if `value` is a Promise", function() {
       it("waits until the promise is fulfilled", function(done) {
         var bar, bar2, foo;
         foo = Promise.defer();
@@ -79,6 +80,7 @@ describe("Promise.defer()", function() {
         expect(bar.promise.isPending).toBe(true);
         error = Error("foo threw!");
         foo.reject(error);
+        bar.promise._unhandled = false;
         return immediate(function() {
           expect(bar.promise.isRejected).toBe(true);
           expect(bar.promise._results[0]).toBe(error);
@@ -90,19 +92,19 @@ describe("Promise.defer()", function() {
 });
 
 describe("Promise.resolve(resolver)", function() {
-  it("expects 'resolver' to be a Function", function() {
+  it("expects `resolver` to be a Function", function() {
     return expect(function() {
       return Promise.resolve(null);
     }).toThrowError("Expected a Function!");
   });
-  it("passes the 'resolve' and 'reject' functions to 'resolver'", function(done) {
+  it("passes the `resolve` and `reject` functions to `resolver`", function(done) {
     return Promise.resolve(function(resolve, reject) {
       expect(getType(resolve)).toBe(Function);
       expect(getType(reject)).toBe(Function);
       return done();
     });
   });
-  return it("creates a Promise that is resolved by the 'resolver'", function(done) {
+  return it("creates a Promise that is resolved by the `resolver`", function(done) {
     var promise;
     promise = Promise.resolve(function(resolve) {
       return resolve(1);
@@ -122,6 +124,7 @@ describe("Promise.try(func)", function() {
     promise = Promise["try"](function() {
       throw error;
     });
+    promise._unhandled = false;
     return immediate(function() {
       expect(promise._results[0]).toBe(error);
       return done();
@@ -184,6 +187,7 @@ describe("Promise.wrap(func)", function() {
       throw error;
     });
     promise = func();
+    promise._unhandled = false;
     return immediate(function() {
       expect(promise._results[0]).toBe(error);
       return done();
@@ -224,6 +228,7 @@ describe("Promise.ify(func)", function() {
       return callback(error);
     });
     promise = func();
+    promise._unhandled = false;
     return immediate(function() {
       expect(promise._results[0]).toBe(error);
       return done();
@@ -251,7 +256,8 @@ describe("Promise.all(array)", function() {
       return done();
     });
     error = Error("test");
-    return bar.reject(error);
+    bar.reject(error);
+    return bar._unhandled = false;
   });
   return it("allows non-Promise values in `array`", function(done) {
     var input;
@@ -309,6 +315,51 @@ describe("Promise.chain(array)", function() {
       });
       return deferred.promise;
     }).then(function() {
+      return done();
+    });
+  });
+});
+
+describe("promise.then(onFulfilled, onRejected)", function() {});
+
+describe("promise.always(onResolved)", function() {
+  it("inherits the error of `this` when it's rejected", function(done) {
+    var bar, foo;
+    foo = Promise.reject(Error("foo threw!"));
+    bar = foo.always(function(error, result) {
+      expect(error).toBe(foo._results[0]);
+      expect(result).toBe(null);
+      throw Error("bar threw!");
+    });
+    return bar.fail(function(error) {
+      expect(error).toBe(foo._results[0]);
+      return done();
+    });
+  });
+  return it("inherits the result of `this` when it's fulfilled", function(done) {
+    var bar, foo;
+    foo = Promise(1);
+    bar = foo.always(function(error, result) {
+      expect(error).toBe(null);
+      expect(result).toBe(foo._results[0]);
+      return 2;
+    });
+    return bar.then(function() {
+      expect(arguments[0]).toBe(foo._results[0]);
+      return done();
+    });
+  });
+});
+
+describe("promise.curry(args...)", function() {
+  return it("attaches results onto a new Promise", function(done) {
+    var bar, foo;
+    foo = Promise(1);
+    bar = foo.curry(2, 3);
+    expect(bar).not.toBe(foo);
+    expect(bar._results).toEqual([void 0]);
+    return bar.then(function() {
+      expect(bar._results).toEqual([1, 2, 3]);
       return done();
     });
   });
