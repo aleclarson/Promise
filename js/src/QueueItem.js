@@ -22,22 +22,18 @@ type.defineValues({
 
 type.defineMethods({
   fulfill: function(promise) {
-    var next;
     assert(promise.isFulfilled, "'promise' must be fulfilled!");
-    next = this.promise;
-    if (!next.isPending) {
+    if (!this.promise.isPending) {
       return;
     }
-    promise._thenResolve(next, this.onFulfilled);
+    promise._thenResolve(this.promise, this.onFulfilled);
   },
   reject: function(promise) {
-    var next;
     assert(promise.isRejected, "'promise' must be rejected!");
-    next = this.promise;
-    if (!next.isPending) {
+    if (!this.promise.isPending) {
       return;
     }
-    promise._thenResolve(next, this.onRejected);
+    promise._thenResolve(this.promise, this.onRejected);
   }
 });
 

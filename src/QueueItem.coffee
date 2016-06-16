@@ -22,16 +22,14 @@ type.defineMethods
 
   fulfill: (promise) ->
     assert promise.isFulfilled, "'promise' must be fulfilled!"
-    next = @promise
-    return if not next.isPending
-    promise._thenResolve next, @onFulfilled
+    return if not @promise.isPending
+    promise._thenResolve @promise, @onFulfilled
     return
 
   reject: (promise) ->
     assert promise.isRejected, "'promise' must be rejected!"
-    next = @promise
-    return if not next.isPending
-    promise._thenResolve next, @onRejected
+    return if not @promise.isPending
+    promise._thenResolve @promise, @onRejected
     return
 
 module.exports = type.build()

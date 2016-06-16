@@ -67,7 +67,7 @@ promise.fail (error) ->
 
 Wait until this `Promise` is resolved, then call the given `Function`.
 
-Unless this `Promise` is never resolved, the passed function will always be called!
+Unless this `Promise` is never resolved, `onResolved` will always be called!
 
 ```coffee
 promise.always (error, result) ->
