@@ -52,13 +52,12 @@ type.definePrototype
     else "pending"
 
   value: get: ->
+    assert @isFulfilled, "Only fulfilled Promises have a `value` property."
     @_results[0]
 
   error: get: ->
+    assert @isRejected, "Only rejected Promises have an `error` property."
     @_results[0]
-
-  meta: get: ->
-    @_results.slice 1
 
   isPending: get: ->
     @_state is PENDING
@@ -71,7 +70,15 @@ type.definePrototype
 
 type.defineMethods
 
-  inspect: -> { @state, @value, @meta }
+  inspect: ->
+    data = { @state }
+    if @isFulfilled
+      data.value = @value
+    else if @isRejected
+      data.error = @error
+    if @_results.length > 1
+      data.meta = @_results.slice 1
+    return data
 
   then: (onFulfilled, onRejected) ->
 
@@ -389,7 +396,7 @@ type.defineStatics
     assertType func, Function
     promise = Promise._defer()
     isDev and promise._tracers.init = Tracer "Promise.try()"
-    immediate => promise._resolve [], func
+    immediate -> promise._resolve [], func
     return promise
 
   wrap: (func) ->

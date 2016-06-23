@@ -82,17 +82,14 @@ type.definePrototype({
   },
   value: {
     get: function() {
+      assert(this.isFulfilled, "Only fulfilled Promises have a `value` property.");
       return this._results[0];
     }
   },
   error: {
     get: function() {
+      assert(this.isRejected, "Only rejected Promises have an `error` property.");
       return this._results[0];
-    }
-  },
-  meta: {
-    get: function() {
-      return this._results.slice(1);
     }
   },
   isPending: {
@@ -114,11 +111,19 @@ type.definePrototype({
 
 type.defineMethods({
   inspect: function() {
-    return {
-      state: this.state,
-      value: this.value,
-      meta: this.meta
+    var data;
+    data = {
+      state: this.state
     };
+    if (this.isFulfilled) {
+      data.value = this.value;
+    } else if (this.isRejected) {
+      data.error = this.error;
+    }
+    if (this._results.length > 1) {
+      data.meta = this._results.slice(1);
+    }
+    return data;
   },
   then: function(onFulfilled, onRejected) {
     var promise;
@@ -441,11 +446,9 @@ type.defineStatics({
     assertType(func, Function);
     promise = Promise._defer();
     isDev && (promise._tracers.init = Tracer("Promise.try()"));
-    immediate((function(_this) {
-      return function() {
-        return promise._resolve([], func);
-      };
-    })(this));
+    immediate(function() {
+      return promise._resolve([], func);
+    });
     return promise;
   },
   wrap: function(func) {
