@@ -179,17 +179,17 @@ describe "Promise.try(func)", ->
 
   it "calls `promise.always` if `func` returns a Promise", (done) ->
 
-    foo = Promise._defer()
-    fooTry = Promise.try -> foo
+    foo = Promise.defer()
+    fooTry = Promise.try -> foo.promise
 
-    bar = Promise._defer()
-    barTry = Promise.try -> bar
+    bar = Promise.defer()
+    barTry = Promise.try -> bar.promise
     barTry._unhandled = no
 
     immediate ->
 
-      foo._fulfill fooResult = 1
-      bar._reject barResult = FakeError()
+      foo.resolve fooResult = 1
+      bar.reject barResult = FakeError()
 
       expect fooTry.isPending
         .toBe yes
@@ -342,12 +342,12 @@ describe "Promise.all(array)", ->
   it "rejects the new Promise if one of the items in `array` is rejected", (done) ->
 
     foo = Promise 1
-    bar = Promise._defer()
+    bar = Promise.defer()
 
     error = FakeError()
-    immediate -> bar._reject error
+    immediate -> bar.reject error
 
-    Promise.all [ foo, bar ]
+    Promise.all [ foo, bar.promise ]
 
     .fail ->
 
@@ -509,9 +509,9 @@ describe "promise.then(onFulfilled, onRejected)", ->
 
   it "supports returning a Promise inside `onFulfilled`", (done) ->
 
-    deferred = Promise._defer()
+    deferred = Promise.defer()
     foo = Promise 1
-    bar = foo.then -> deferred
+    bar = foo.then -> deferred.promise
 
     expect bar.isPending
       .toBe yes
@@ -521,7 +521,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
       expect bar.isPending
         .toBe yes
 
-      deferred._fulfill 2
+      deferred.resolve 2
 
       immediate ->
 
@@ -535,9 +535,9 @@ describe "promise.then(onFulfilled, onRejected)", ->
 
   it "supports returning a Promise inside `onRejected`", (done) ->
 
-    deferred = Promise._defer()
+    deferred = Promise.defer()
     foo = Promise.reject FakeError()
-    bar = foo.fail -> deferred
+    bar = foo.fail -> deferred.promise
 
     expect bar.isPending
       .toBe yes
@@ -547,7 +547,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
       expect bar.isPending
         .toBe yes
 
-      deferred._fulfill 2
+      deferred.resolve 2
 
       immediate ->
 
@@ -604,16 +604,16 @@ describe "promise.always(onResolved)", ->
 
     foo = Promise 1
 
-    deferred = Promise._defer()
+    deferred = Promise.defer()
 
-    bar = foo.always -> deferred
+    bar = foo.always -> deferred.promise
 
     immediate ->
 
       expect bar.isPending
         .toBe yes
 
-      deferred._fulfill 2
+      deferred.resolve 2
 
       bar.then ->
 

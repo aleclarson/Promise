@@ -145,19 +145,19 @@ describe("Promise.try(func)", function() {
   });
   it("calls `promise.always` if `func` returns a Promise", function(done) {
     var bar, barTry, foo, fooTry;
-    foo = Promise._defer();
+    foo = Promise.defer();
     fooTry = Promise["try"](function() {
-      return foo;
+      return foo.promise;
     });
-    bar = Promise._defer();
+    bar = Promise.defer();
     barTry = Promise["try"](function() {
-      return bar;
+      return bar.promise;
     });
     barTry._unhandled = false;
     return immediate(function() {
       var barResult, fooResult;
-      foo._fulfill(fooResult = 1);
-      bar._reject(barResult = FakeError());
+      foo.resolve(fooResult = 1);
+      bar.reject(barResult = FakeError());
       expect(fooTry.isPending).toBe(true);
       expect(barTry.isPending).toBe(true);
       return immediate(function() {
@@ -277,12 +277,12 @@ describe("Promise.all(array)", function() {
   it("rejects the new Promise if one of the items in `array` is rejected", function(done) {
     var bar, error, foo;
     foo = Promise(1);
-    bar = Promise._defer();
+    bar = Promise.defer();
     error = FakeError();
     immediate(function() {
-      return bar._reject(error);
+      return bar.reject(error);
     });
-    return Promise.all([foo, bar]).fail(function() {
+    return Promise.all([foo, bar.promise]).fail(function() {
       expect(arguments[0]).toBe(error);
       return done();
     });
@@ -405,15 +405,15 @@ describe("promise.then(onFulfilled, onRejected)", function() {
   });
   it("supports returning a Promise inside `onFulfilled`", function(done) {
     var bar, deferred, foo;
-    deferred = Promise._defer();
+    deferred = Promise.defer();
     foo = Promise(1);
     bar = foo.then(function() {
-      return deferred;
+      return deferred.promise;
     });
     expect(bar.isPending).toBe(true);
     return immediate(function() {
       expect(bar.isPending).toBe(true);
-      deferred._fulfill(2);
+      deferred.resolve(2);
       return immediate(function() {
         expect(bar.isFulfilled).toBe(true);
         expect(bar._results[0]).toBe(2);
@@ -423,15 +423,15 @@ describe("promise.then(onFulfilled, onRejected)", function() {
   });
   return it("supports returning a Promise inside `onRejected`", function(done) {
     var bar, deferred, foo;
-    deferred = Promise._defer();
+    deferred = Promise.defer();
     foo = Promise.reject(FakeError());
     bar = foo.fail(function() {
-      return deferred;
+      return deferred.promise;
     });
     expect(bar.isPending).toBe(true);
     return immediate(function() {
       expect(bar.isPending).toBe(true);
-      deferred._fulfill(2);
+      deferred.resolve(2);
       return immediate(function() {
         expect(bar.isFulfilled).toBe(true);
         expect(bar._results[0]).toBe(2);
@@ -470,13 +470,13 @@ describe("promise.always(onResolved)", function() {
   it("supports `onResolved` returning a Promise", function(done) {
     var bar, deferred, foo;
     foo = Promise(1);
-    deferred = Promise._defer();
+    deferred = Promise.defer();
     bar = foo.always(function() {
-      return deferred;
+      return deferred.promise;
     });
     return immediate(function() {
       expect(bar.isPending).toBe(true);
-      deferred._fulfill(2);
+      deferred.resolve(2);
       return bar.then(function() {
         expect(bar.isFulfilled).toBe(true);
         expect(bar._results[0]).toBe(1);

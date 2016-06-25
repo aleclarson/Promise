@@ -77,23 +77,6 @@ promise.always (error, result) ->
     # Do something with the result!
 ```
 
-### Promise::curry(args...)
-
-Attach values to this `Promise` that will be passed on to every
-`Promise` that directly follows it.
-
-```coffee
-promise.curry 1, 2, 3
-promise.then (value, x, y, z) ->
-  # The 'value' is the result of 'promise'.
-  # The 'x', 'y', and 'z' arguments are from 'promise.curry'!
-promise.fail (error, x, y, z) ->
-  # Rejection handlers also get the arguments!
-.then (value, x, y, z) ->
-  # Curried values are passed down to every
-  # Promise that indirectly follows the curried Promise.
-```
-
 ### Promise.reject(error)
 
 Create a rejected `Promise` with an `Error.Kind`!
