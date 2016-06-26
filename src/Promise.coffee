@@ -6,7 +6,6 @@ spliceArray = require "spliceArray"
 PureObject = require "PureObject"
 assertType = require "assertType"
 bindMethod = require "bindMethod"
-wrapValue = require "wrapValue"
 immediate = require "immediate"
 hasKeys = require "hasKeys"
 Tracer = require "tracer"
@@ -148,44 +147,42 @@ type.defineMethods
 
   # The only difference from 'this.always'
   # is that a Promise must be passed.
-  _always: (promise) ->
+  _always: (promise, onResolved) ->
 
     assertType promise, Promise
     assertType arguments[1], Function.Maybe
 
-    if arguments[1]
+    onResolved and resolve = (args) =>
 
-      onResolved = wrapValue arguments[1], (onResolved) => (args) =>
+      result = onResolved.apply null, args
 
-        result = onResolved.apply null, args
+      # Ignore return value of `onResolved`; unless it's a Promise.
+      return FULFILLED if not isType result, Promise
 
-        # Ignore return value of `onResolved`; unless it's a Promise.
-        return FULFILLED if not isType result, Promise
+      # Ignore return value of inner promise.
+      return FULFILLED if result.isFulfilled
 
-        # Ignore return value of inner promise.
-        return FULFILLED if result.isFulfilled
+      # But use any error of inner promise.
+      throw result.error if result.isRejected
 
-        # But use any error of inner promise.
-        throw result.error if result.isRejected
+      # Create new Promise that resolves when
+      # the inner promise does, but override
+      # the results to match the parent promise.
+      # If the inner promise throws an error,
+      # it is used to reject the outer promise.
+      deferred = Promise PENDING
+      result._queue.push QueueItem deferred, =>
+        deferred._inheritValues @_values, 1
+        return @_values[0] if @isFulfilled
+        throw @_values[0]
 
-        # Create new Promise that resolves when
-        # the inner promise does, but override
-        # the results to match the parent promise.
-        # If the inner promise throws an error,
-        # it is used to reject the outer promise.
-        deferred = Promise PENDING
-        result._queue.push QueueItem deferred, =>
-          deferred._inheritValues @_values, 1
-          return @_values[0] if @isFulfilled
-          throw @_values[0]
-
-        return deferred
+      return deferred
 
     onFulfilled = =>
 
       if onResolved
         spliceArray arguments, 0, 0, null
-        result = onResolved arguments
+        result = resolve arguments
         return result if result isnt FULFILLED
 
       promise._inheritValues @_values, 1
@@ -195,7 +192,7 @@ type.defineMethods
 
       if onResolved
         spliceArray arguments, 1, 0, null
-        result = onResolved arguments
+        result = resolve arguments
         return result if result isnt FULFILLED
 
       promise._inheritValues @_values, 1
@@ -399,9 +396,8 @@ type.defineStatics
       return
 
     sync.repeat length, (index) ->
-      deferred = Promise array[index], index
-      deferred.then fulfill, reject
-      return
+      Promise array[index], index
+        .then fulfill, reject
 
     return promise
 

@@ -12,15 +12,23 @@ describe("Promise(value)", function() {
   it("returns a new Promise that is fulfilled with `value`", function() {
     var foo;
     foo = Promise(1);
-    return expect(foo._results[0]).toBe(1);
+    return expect(foo._values[0]).toBe(1);
   });
-  return describe("but if `value` is a Promise", function() {
-    return it("simply returns the `value`", function() {
-      var bar, foo;
-      foo = Promise();
-      bar = Promise(foo);
-      return expect(foo).toBe(bar);
+  it("can be passed another Promise", function() {
+    var bar, foo;
+    foo = Promise.defer();
+    bar = Promise(foo.promise);
+    foo.resolve(1);
+    expect(bar.isPending).toBe(true);
+    return immediate(function() {
+      expect(bar.isFulfilled).toBe(true);
+      return expect(bar._values[0]).toBe(1);
     });
+  });
+  return it("inherits any other values passed", function() {
+    var foo;
+    foo = Promise(1, 2, 3);
+    return expect(foo._values).toEqual([1, 2, 3]);
   });
 });
 
@@ -30,7 +38,7 @@ describe("Promise.reject(error)", function() {
     error = FakeError();
     foo = Promise.reject(error);
     foo._unhandled = false;
-    return expect(foo._results[0]).toBe(error);
+    return expect(foo._values[0]).toBe(error);
   });
   return it("throws if `error` is not an instanceof Error", function() {
     return expect(function() {
@@ -56,7 +64,7 @@ describe("Promise.defer()", function() {
       var deferred;
       deferred = Promise.defer();
       deferred.resolve(1);
-      return expect(deferred.promise._results[0]).toBe(1);
+      return expect(deferred.promise._values[0]).toBe(1);
     });
     return describe("but if `value` is a Promise", function() {
       it("waits until the promise is fulfilled", function(done) {
@@ -70,7 +78,7 @@ describe("Promise.defer()", function() {
         foo.resolve(1);
         return immediate(function() {
           expect(bar.promise.isFulfilled).toBe(true);
-          expect(bar.promise._results[0]).toBe(1);
+          expect(bar.promise._values[0]).toBe(1);
           return done();
         });
       });
@@ -86,7 +94,7 @@ describe("Promise.defer()", function() {
         expect(bar.promise.isPending).toBe(true);
         return immediate(function() {
           expect(bar.promise.isRejected).toBe(true);
-          expect(bar.promise._results[0]).toBe(error);
+          expect(bar.promise._values[0]).toBe(error);
           return done();
         });
       });
@@ -114,7 +122,7 @@ describe("Promise.resolve(resolver)", function() {
     });
     expect(getType(promise)).toBe(Promise);
     return immediate(function() {
-      expect(promise._results[0]).toBe(1);
+      expect(promise._values[0]).toBe(1);
       return done();
     });
   });
@@ -129,7 +137,7 @@ describe("Promise.try(func)", function() {
     });
     promise._unhandled = false;
     return immediate(function() {
-      expect(promise._results[0]).toBe(error);
+      expect(promise._values[0]).toBe(error);
       return done();
     });
   });
@@ -139,7 +147,7 @@ describe("Promise.try(func)", function() {
       return 1;
     });
     return immediate(function() {
-      expect(promise._results[0]).toBe(1);
+      expect(promise._values[0]).toBe(1);
       return done();
     });
   });
@@ -163,8 +171,8 @@ describe("Promise.try(func)", function() {
       return immediate(function() {
         expect(fooTry.isFulfilled).toBe(true);
         expect(barTry.isRejected).toBe(true);
-        expect(fooTry._results[0]).toBe(fooResult);
-        expect(barTry._results[0]).toBe(barResult);
+        expect(fooTry._values[0]).toBe(fooResult);
+        expect(barTry._values[0]).toBe(barResult);
         return done();
       });
     });
@@ -191,7 +199,7 @@ describe("Promise.wrap(func)", function() {
     });
     promise = func();
     return immediate(function() {
-      expect(promise._results[0]).toBe(1);
+      expect(promise._values[0]).toBe(1);
       return done();
     });
   });
@@ -204,7 +212,7 @@ describe("Promise.wrap(func)", function() {
     promise = func();
     promise._unhandled = false;
     return immediate(function() {
-      expect(promise._results[0]).toBe(error);
+      expect(promise._values[0]).toBe(error);
       return done();
     });
   });
@@ -217,7 +225,7 @@ describe("Promise.wrap(func)", function() {
     bar = func();
     return immediate(function() {
       return immediate(function() {
-        expect(bar._results[0]).toBe(1);
+        expect(bar._values[0]).toBe(1);
         return done();
       });
     });
@@ -234,7 +242,7 @@ describe("Promise.ify(func)", function() {
     promise = func();
     promise._unhandled = false;
     expect(promise.isRejected).toBe(true);
-    return expect(promise._results[0]).toBe(error);
+    return expect(promise._values[0]).toBe(error);
   });
   it("returns a fulfilled Promise if `callback` passes a result immediately", function() {
     var func, promise;
@@ -242,7 +250,7 @@ describe("Promise.ify(func)", function() {
       return callback(null, 1);
     });
     promise = func();
-    return expect(promise._results[0]).toBe(1);
+    return expect(promise._values[0]).toBe(1);
   });
   it("returns a pending Promise if `callback` is not called immediately", function(done) {
     var func, promise;
@@ -259,7 +267,7 @@ describe("Promise.ify(func)", function() {
       return callback(null, arg1);
     });
     promise = func(1);
-    return expect(promise._results[0]).toBe(1);
+    return expect(promise._values[0]).toBe(1);
   });
 });
 
@@ -416,7 +424,7 @@ describe("promise.then(onFulfilled, onRejected)", function() {
       deferred.resolve(2);
       return immediate(function() {
         expect(bar.isFulfilled).toBe(true);
-        expect(bar._results[0]).toBe(2);
+        expect(bar._values[0]).toBe(2);
         return done();
       });
     });
@@ -434,7 +442,7 @@ describe("promise.then(onFulfilled, onRejected)", function() {
       deferred.resolve(2);
       return immediate(function() {
         expect(bar.isFulfilled).toBe(true);
-        expect(bar._results[0]).toBe(2);
+        expect(bar._values[0]).toBe(2);
         return done();
       });
     });
@@ -447,11 +455,11 @@ describe("promise.always(onResolved)", function() {
     foo = Promise(1);
     bar = foo.always(function(error, result) {
       expect(error).toBe(null);
-      expect(result).toBe(foo._results[0]);
+      expect(result).toBe(foo._values[0]);
       return 2;
     });
     return bar.then(function() {
-      expect(arguments[0]).toBe(foo._results[0]);
+      expect(arguments[0]).toBe(foo._values[0]);
       return done();
     });
   });
@@ -459,11 +467,11 @@ describe("promise.always(onResolved)", function() {
     var bar, foo;
     foo = Promise.reject(FakeError());
     bar = foo.always(function(error, result) {
-      expect(error).toBe(foo._results[0]);
+      expect(error).toBe(foo._values[0]);
       return expect(result).toBe(null);
     });
     return bar.fail(function(error) {
-      expect(error).toBe(foo._results[0]);
+      expect(error).toBe(foo._values[0]);
       return done();
     });
   });
@@ -479,7 +487,7 @@ describe("promise.always(onResolved)", function() {
       deferred.resolve(2);
       return bar.then(function() {
         expect(bar.isFulfilled).toBe(true);
-        expect(bar._results[0]).toBe(1);
+        expect(bar._values[0]).toBe(1);
         return done();
       });
     });
@@ -494,41 +502,7 @@ describe("promise.always(onResolved)", function() {
     expect(bar.isPending).toBe(true);
     return immediate(function() {
       expect(bar.isRejected).toBe(true);
-      expect(bar._results[0]).toBe(error);
-      return done();
-    });
-  });
-});
-
-describe("promise.curry(args...)", function() {
-  it("returns a fulfilled Promise if `promise` is fulfilled", function() {
-    var bar, foo;
-    foo = Promise(1);
-    bar = foo.curry(2, 3);
-    expect(bar.isFulfilled).toBe(true);
-    return expect(bar._results).toEqual([1, 2, 3]);
-  });
-  it("returns a rejected Promise if `promise` is rejected", function() {
-    var bar, error, foo;
-    error = FakeError();
-    foo = Promise.reject(error);
-    bar = foo.curry(2, 3);
-    bar._unhandled = false;
-    expect(foo._unhandled).toBe(false);
-    expect(bar.isRejected).toBe(true);
-    return expect(bar._results).toEqual([error, 2, 3]);
-  });
-  return it("returns a pending Promise if `promise` is pending", function(done) {
-    var bar, foo;
-    foo = Promise["try"](function() {
-      return 1;
-    });
-    bar = foo.curry(2, 3);
-    expect(bar.isPending).toBe(true);
-    expect(bar._results).toEqual([void 0]);
-    return bar.then(function() {
-      expect(bar.isFulfilled).toBe(true);
-      expect(bar._results).toEqual([1, 2, 3]);
+      expect(bar._values[0]).toBe(error);
       return done();
     });
   });

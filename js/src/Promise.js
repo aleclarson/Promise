@@ -1,4 +1,4 @@
-var FULFILLED, PENDING, Promise, PureObject, QueueItem, REJECTED, Tracer, Type, assert, assertType, bindMethod, emptyFunction, hasKeys, immediate, isType, spliceArray, sync, type, wrapValue;
+var FULFILLED, PENDING, Promise, PureObject, QueueItem, REJECTED, Tracer, Type, assert, assertType, bindMethod, emptyFunction, hasKeys, immediate, isType, spliceArray, sync, type;
 
 require("isDev");
 
@@ -11,8 +11,6 @@ PureObject = require("PureObject");
 assertType = require("assertType");
 
 bindMethod = require("bindMethod");
-
-wrapValue = require("wrapValue");
 
 immediate = require("immediate");
 
@@ -169,44 +167,40 @@ type.defineMethods({
     }
     promise._reject(this._values[0]);
   },
-  _always: function(promise) {
-    var onFulfilled, onRejected, onResolved;
+  _always: function(promise, onResolved) {
+    var onFulfilled, onRejected, resolve;
     assertType(promise, Promise);
     assertType(arguments[1], Function.Maybe);
-    if (arguments[1]) {
-      onResolved = wrapValue(arguments[1], (function(_this) {
-        return function(onResolved) {
-          return function(args) {
-            var deferred, result;
-            result = onResolved.apply(null, args);
-            if (!isType(result, Promise)) {
-              return FULFILLED;
-            }
-            if (result.isFulfilled) {
-              return FULFILLED;
-            }
-            if (result.isRejected) {
-              throw result.error;
-            }
-            deferred = Promise(PENDING);
-            result._queue.push(QueueItem(deferred, function() {
-              deferred._inheritValues(_this._values, 1);
-              if (_this.isFulfilled) {
-                return _this._values[0];
-              }
-              throw _this._values[0];
-            }));
-            return deferred;
-          };
-        };
-      })(this));
-    }
+    onResolved && (resolve = (function(_this) {
+      return function(args) {
+        var deferred, result;
+        result = onResolved.apply(null, args);
+        if (!isType(result, Promise)) {
+          return FULFILLED;
+        }
+        if (result.isFulfilled) {
+          return FULFILLED;
+        }
+        if (result.isRejected) {
+          throw result.error;
+        }
+        deferred = Promise(PENDING);
+        result._queue.push(QueueItem(deferred, function() {
+          deferred._inheritValues(_this._values, 1);
+          if (_this.isFulfilled) {
+            return _this._values[0];
+          }
+          throw _this._values[0];
+        }));
+        return deferred;
+      };
+    })(this));
     onFulfilled = (function(_this) {
       return function() {
         var result;
         if (onResolved) {
           spliceArray(arguments, 0, 0, null);
-          result = onResolved(arguments);
+          result = resolve(arguments);
           if (result !== FULFILLED) {
             return result;
           }
@@ -220,7 +214,7 @@ type.defineMethods({
         var result;
         if (onResolved) {
           spliceArray(arguments, 1, 0, null);
-          result = onResolved(arguments);
+          result = resolve(arguments);
           if (result !== FULFILLED) {
             return result;
           }
@@ -456,9 +450,7 @@ type.defineStatics({
       }
     };
     sync.repeat(length, function(index) {
-      var deferred;
-      deferred = Promise(array[index], index);
-      deferred.then(fulfill, reject);
+      return Promise(array[index], index).then(fulfill, reject);
     });
     return promise;
   },

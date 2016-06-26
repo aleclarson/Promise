@@ -10,17 +10,37 @@ Promise = require "../src/Promise"
 describe "Promise(value)", ->
 
   it "returns a new Promise that is fulfilled with `value`", ->
+
     foo = Promise 1
-    expect foo._results[0]
+
+    expect foo._values[0]
       .toBe 1
 
-  describe "but if `value` is a Promise", ->
+  it "can be passed another Promise", ->
 
-    it "simply returns the `value`", ->
-      foo = Promise()
-      bar = Promise foo
-      expect foo
-        .toBe bar
+    foo = Promise.defer()
+
+    bar = Promise foo.promise
+
+    foo.resolve 1
+
+    expect bar.isPending
+      .toBe yes
+
+    immediate ->
+
+      expect bar.isFulfilled
+        .toBe yes
+
+      expect bar._values[0]
+        .toBe 1
+
+  it "inherits any other values passed", ->
+
+    foo = Promise 1, 2, 3
+
+    expect foo._values
+      .toEqual [ 1, 2, 3 ]
 
 describe "Promise.reject(error)", ->
 
@@ -32,7 +52,7 @@ describe "Promise.reject(error)", ->
     # Prevent reporting.
     foo._unhandled = no
 
-    expect foo._results[0]
+    expect foo._values[0]
       .toBe error
 
   it "throws if `error` is not an instanceof Error", ->
@@ -58,7 +78,7 @@ describe "Promise.defer()", ->
     it "fulfills `deferred.promise` with `value`", ->
       deferred = Promise.defer()
       deferred.resolve 1
-      expect deferred.promise._results[0]
+      expect deferred.promise._values[0]
         .toBe 1
 
     describe "but if `value` is a Promise", ->
@@ -84,7 +104,7 @@ describe "Promise.defer()", ->
           expect bar.promise.isFulfilled
             .toBe yes
 
-          expect bar.promise._results[0]
+          expect bar.promise._values[0]
             .toBe 1
 
           done()
@@ -111,7 +131,7 @@ describe "Promise.defer()", ->
           expect bar.promise.isRejected
             .toBe yes
 
-          expect bar.promise._results[0]
+          expect bar.promise._values[0]
             .toBe error
 
           done()
@@ -143,7 +163,7 @@ describe "Promise.resolve(resolver)", ->
 
     immediate ->
 
-      expect promise._results[0]
+      expect promise._values[0]
         .toBe 1
 
       done()
@@ -161,7 +181,7 @@ describe "Promise.try(func)", ->
 
     immediate ->
 
-      expect promise._results[0]
+      expect promise._values[0]
         .toBe error
 
       done()
@@ -172,7 +192,7 @@ describe "Promise.try(func)", ->
 
     immediate ->
 
-      expect promise._results[0]
+      expect promise._values[0]
         .toBe 1
 
       done()
@@ -205,10 +225,10 @@ describe "Promise.try(func)", ->
         expect barTry.isRejected
           .toBe yes
 
-        expect fooTry._results[0]
+        expect fooTry._values[0]
           .toBe fooResult
 
-        expect barTry._results[0]
+        expect barTry._values[0]
           .toBe barResult
 
         done()
@@ -237,7 +257,7 @@ describe "Promise.wrap(func)", ->
 
     immediate ->
 
-      expect promise._results[0]
+      expect promise._values[0]
         .toBe 1
 
       done()
@@ -253,7 +273,7 @@ describe "Promise.wrap(func)", ->
 
     immediate ->
 
-      expect promise._results[0]
+      expect promise._values[0]
         .toBe error
 
       done()
@@ -267,7 +287,7 @@ describe "Promise.wrap(func)", ->
     # The promise will yield twice.
     immediate -> immediate ->
 
-      expect bar._results[0]
+      expect bar._values[0]
         .toBe 1
 
       done()
@@ -286,7 +306,7 @@ describe "Promise.ify(func)", ->
     expect promise.isRejected
       .toBe yes
 
-    expect promise._results[0]
+    expect promise._values[0]
       .toBe error
 
   it "returns a fulfilled Promise if `callback` passes a result immediately", ->
@@ -296,7 +316,7 @@ describe "Promise.ify(func)", ->
 
     promise = func()
 
-    expect promise._results[0]
+    expect promise._values[0]
       .toBe 1
 
   it "returns a pending Promise if `callback` is not called immediately", (done) ->
@@ -318,7 +338,7 @@ describe "Promise.ify(func)", ->
 
     promise = func 1
 
-    expect promise._results[0]
+    expect promise._values[0]
       .toBe 1
 
 describe "Promise.all(array)", ->
@@ -528,7 +548,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
         expect bar.isFulfilled
           .toBe yes
 
-        expect bar._results[0]
+        expect bar._values[0]
           .toBe 2
 
         done()
@@ -554,7 +574,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
         expect bar.isFulfilled
           .toBe yes
 
-        expect bar._results[0]
+        expect bar._values[0]
           .toBe 2
 
         done()
@@ -570,14 +590,14 @@ describe "promise.always(onResolved)", ->
         .toBe null
 
       expect result
-        .toBe foo._results[0]
+        .toBe foo._values[0]
 
       return 2
 
     bar.then ->
 
       expect arguments[0]
-        .toBe foo._results[0]
+        .toBe foo._values[0]
 
       done()
 
@@ -588,7 +608,7 @@ describe "promise.always(onResolved)", ->
     bar = foo.always (error, result) ->
 
       expect error
-        .toBe foo._results[0]
+        .toBe foo._values[0]
 
       expect result
         .toBe null
@@ -596,7 +616,7 @@ describe "promise.always(onResolved)", ->
     bar.fail (error) ->
 
       expect error
-        .toBe foo._results[0]
+        .toBe foo._values[0]
 
       done()
 
@@ -620,7 +640,7 @@ describe "promise.always(onResolved)", ->
         expect bar.isFulfilled
           .toBe yes
 
-        expect bar._results[0]
+        expect bar._values[0]
           .toBe 1
 
         done()
@@ -639,58 +659,7 @@ describe "promise.always(onResolved)", ->
       expect bar.isRejected
         .toBe yes
 
-      expect bar._results[0]
+      expect bar._values[0]
         .toBe error
-
-      done()
-
-describe "promise.curry(args...)", ->
-
-  it "returns a fulfilled Promise if `promise` is fulfilled", ->
-
-    foo = Promise 1
-    bar = foo.curry 2, 3
-
-    expect bar.isFulfilled
-      .toBe yes
-
-    expect bar._results
-      .toEqual [ 1, 2, 3 ]
-
-  it "returns a rejected Promise if `promise` is rejected", ->
-
-    error = FakeError()
-    foo = Promise.reject error
-
-    bar = foo.curry 2, 3
-    bar._unhandled = no
-
-    expect foo._unhandled
-      .toBe no
-
-    expect bar.isRejected
-      .toBe yes
-
-    expect bar._results
-      .toEqual [ error, 2, 3 ]
-
-  it "returns a pending Promise if `promise` is pending", (done) ->
-
-    foo = Promise.try -> 1
-    bar = foo.curry 2, 3
-
-    expect bar.isPending
-      .toBe yes
-
-    expect bar._results
-      .toEqual [ undefined ]
-
-    bar.then ->
-
-      expect bar.isFulfilled
-        .toBe yes
-
-      expect bar._results
-        .toEqual [ 1, 2, 3 ]
 
       done()
