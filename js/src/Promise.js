@@ -1,4 +1,4 @@
-var FULFILLED, PENDING, Promise, PureObject, QueueItem, REJECTED, Tracer, Type, assert, assertType, bindMethod, emptyFunction, hasKeys, immediate, isType, spliceArray, sync, type;
+var FULFILLED, PENDING, Promise, PureObject, QueueItem, REJECTED, Tracer, Type, assert, assertType, bind, emptyFunction, hasKeys, immediate, isType, spliceArray, sync, type;
 
 require("isDev");
 
@@ -10,8 +10,6 @@ PureObject = require("PureObject");
 
 assertType = require("assertType");
 
-bindMethod = require("bindMethod");
-
 immediate = require("immediate");
 
 hasKeys = require("hasKeys");
@@ -21,6 +19,8 @@ Tracer = require("tracer");
 isType = require("isType");
 
 assert = require("assert");
+
+bind = require("bind");
 
 sync = require("sync");
 
@@ -314,9 +314,7 @@ type.defineMethods({
     }
     resolver = result && result.then;
     if (typeof resolver === "function") {
-      this._tryResolving(function() {
-        return resolver.apply(result, arguments);
-      });
+      this._tryResolving(bind.func(resolver, result));
       return;
     }
     this._fulfill(result);
@@ -324,8 +322,8 @@ type.defineMethods({
   _tryResolving: function(resolver) {
     var error, reject, resolve;
     assertType(resolver, Function);
-    reject = bindMethod(this, "_reject");
-    resolve = bindMethod(this, "_tryFulfilling");
+    reject = bind.method(this, "_reject");
+    resolve = bind.method(this, "_tryFulfilling");
     try {
       resolver(resolve, reject);
     } catch (error1) {
@@ -397,12 +395,8 @@ type.defineStatics({
   wrap: function(func) {
     assertType(func, Function);
     return function() {
-      var args, promise, self;
-      self = this;
-      args = arguments;
-      promise = Promise["try"](function() {
-        return func.apply(self, args);
-      });
+      var promise;
+      promise = Promise["try"](bind.func(func, this, arguments));
       isDev && (promise._tracers.init = Tracer("Promise.wrap()"));
       return promise;
     };
@@ -426,6 +420,24 @@ type.defineStatics({
       return promise;
     };
   },
+  assert: function(reason, invariant) {
+    assertType(reason, String.Maybe);
+    assertType(invariant, [Promise, Boolean, Function]);
+    if (isType(invariant, Boolean)) {
+      if (invariant) {
+        return Promise();
+      }
+      return Promise.reject(Error(reason));
+    } else if (isType(invariant, Function)) {
+      invariant = Promise["try"](invariant);
+    }
+    return invariant.then(function(invariant) {
+      if (invariant) {
+        return;
+      }
+      throw Error(reason);
+    });
+  },
   all: function(array) {
     var fulfill, length, promise, reject, remaining, results;
     assertType(array, Array);
@@ -437,7 +449,7 @@ type.defineStatics({
     isDev && (promise._tracers.init = Tracer("Promise.all()"));
     results = new Array(length);
     remaining = length;
-    reject = bindMethod(promise, "_reject");
+    reject = bind.method(promise, "_reject");
     fulfill = function(result, index) {
       if (!promise.isPending) {
         return;
@@ -470,7 +482,7 @@ type.defineStatics({
       promise._fulfill(results);
       return promise;
     }
-    reject = bindMethod(promise, "_reject");
+    reject = bind.method(promise, "_reject");
     fulfill = function(result, key) {
       if (!promise.isPending) {
         return;

@@ -5,12 +5,12 @@ emptyFunction = require "emptyFunction"
 spliceArray = require "spliceArray"
 PureObject = require "PureObject"
 assertType = require "assertType"
-bindMethod = require "bindMethod"
 immediate = require "immediate"
 hasKeys = require "hasKeys"
 Tracer = require "tracer"
 isType = require "isType"
 assert = require "assert"
+bind = require "bind"
 sync = require "sync"
 Type = require "Type"
 
@@ -287,7 +287,7 @@ type.defineMethods
 
     resolver = result and result.then
     if typeof resolver is "function"
-      @_tryResolving -> resolver.apply result, arguments
+      @_tryResolving bind.func resolver, result
       return
 
     @_fulfill result
@@ -300,8 +300,8 @@ type.defineMethods
 
     assertType resolver, Function
 
-    reject = bindMethod this, "_reject"
-    resolve = bindMethod this, "_tryFulfilling"
+    reject = bind.method this, "_reject"
+    resolve = bind.method this, "_tryFulfilling"
 
     try resolver resolve, reject
     catch error then reject error
@@ -352,9 +352,7 @@ type.defineStatics
   wrap: (func) ->
     assertType func, Function
     return ->
-      self = this
-      args = arguments
-      promise = Promise.try -> func.apply self, args
+      promise = Promise.try bind.func func, this, arguments
       isDev and promise._tracers.init = Tracer "Promise.wrap()"
       return promise
 
@@ -369,6 +367,18 @@ type.defineStatics
         else promise._fulfill result
       func.apply this, arguments # TODO: Wrap this in try/catch?
       return promise
+
+  assert: (reason, invariant) ->
+    assertType reason, String.Maybe
+    assertType invariant, [ Promise, Boolean, Function ]
+    if isType invariant, Boolean
+      return Promise() if invariant
+      return Promise.reject Error reason
+    else if isType invariant, Function
+      invariant = Promise.try invariant
+    return invariant.then (invariant) ->
+      return if invariant
+      throw Error reason
 
   all: (array) ->
 
@@ -385,7 +395,7 @@ type.defineStatics
     results = new Array length
     remaining = length
 
-    reject = bindMethod promise, "_reject"
+    reject = bind.method promise, "_reject"
     fulfill = (result, index) ->
       return if not promise.isPending
       assertType index, Number
@@ -421,7 +431,7 @@ type.defineStatics
       promise._fulfill results
       return promise
 
-    reject = bindMethod promise, "_reject"
+    reject = bind.method promise, "_reject"
     fulfill = (result, key) ->
       return if not promise.isPending
       assertType key, [ String, Number ]
