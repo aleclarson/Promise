@@ -3,40 +3,50 @@
 
 A `Promise` implementation written in CoffeeScript and derived from [calvinmetcalf/lie](https://github.com/calvinmetcalf/lie).
 
+**NOTE:** This is not entirely spec-compliant.
+
 ```coffee
-# Create a fulfilled Promise!
-# If the passed value is a Promise, it is
-# returned instead of creating a new Promise.
-promise = Promise 100
+# Fulfill a new Promise with the given value.
+promise = Promise result
 
-# Equals true if the Promise is neither fulfilled or rejected.
-promise.isPending
+# If an object with a `then` method is passed,
+# use it to resolve the new Promise.
+promise = Promise thenable
 
-# Equals true if the Promise was resolved without error.
-promise.isFulfilled
+# Attach metadata to the new Promise.
+# For example, attach the `index` and `array`
+# when the Promise is created inside a loop.
+promise = Promise result, index, array
 
-# Equals true if the Promise caught an error.
-promise.isRejected
+# Reject a new Promise with the given error.
+promise = Promise.reject error
 ```
 
-### Promise.try(func)
+&nbsp;
+
+### Promise.try
+
+```coffee
+promise = Promise.try func
+```
 
 Call a `Function` safely and resolve its result into a `Promise`.
 
 It's guaranteed that `func` won't be called until the next event loop tick.
 
-```coffee
-promise = Promise.try ->
-  #
-  # If this function throws, the Promise will be rejected.
-  #
-  # If this function returns a Promise, we will wait
-  # for the Promise to be resolved, and then resolve the
-  # Promise created by 'Promise.try'.
-  #
-```
+If `func` throws, the `Promise` will be rejected.
 
-### Promise::then(onFulfilled, onRejected)
+If this function returns a Promise, we will wait
+for the Promise to be resolved, and then resolve the
+Promise created by 'Promise.try'.
+
+&nbsp;
+
+### Promise::then
+
+```coffee
+promise.then onFulfilled, onRejected
+```
 
 Wait until this `Promise` is resolve, then call `onFulfilled` if
 this `Promise` is fulfilled, or call `onRejected` if this `Promise` is rejected.
@@ -46,77 +56,58 @@ Both `onFulfilled` and `onRejected` can be undefined, without an error being thr
 Only one of the passed functions will ever be called. If this `Promise` is never
 resolved, none of the passed functions will ever be called.
 
+&nbsp;
+
+### Promise::fail
+
 ```coffee
-promise.then (result) ->
-  # Do something with the result!
-
-, (error) ->
-  # Handle the error in here.
+promise.fail onRejected
 ```
-
-### Promise::fail(onRejected)
 
 Wait until this `Promise` is rejected, then call the given `Function`.
 
-```coffee
-promise.fail (error) ->
-  # Handle the error in here.
-```
+&nbsp;
 
-### Promise::always(onResolved)
+### Promise::always
+
+```coffee
+promise.always onResolved
+```
 
 Wait until this `Promise` is resolved, then call the given `Function`.
 
 Unless this `Promise` is never resolved, `onResolved` will always be called!
 
-```coffee
-promise.always (error, result) ->
-  if error
-    # Handle the error in here.
-  else
-    # Do something with the result!
-```
+&nbsp;
 
-### Promise.reject(error)
-
-Create a rejected `Promise` with an `Error.Kind`!
-
-```
-promise = Promise.reject Error "Something went wrong!"
-```
-
-### Promise.resolve(resolver)
+### Promise.defer
 
 Create a pending `Promise` that is resolved manually.
 
-You must pass a `Function` that takes two arguments:
-
-- `resolve(value)`: If the value is a `Promise`, it is depended on by this `Promise`.
-
-- `reject(error)`: Rejects this `Promise`.
-
-The new `Promise` will remain pending until one of the functions is called.
-
 ```coffee
-promise = Promise.resolve (resolve, reject) ->
-  # Do something here.
+deferred = Promise.defer()
+
+# The new Promise you should return.
+deferred.promise
+
+# Try resolving the new Promise.
+# If the result is "thenable", depend on it.
+deferred.resolve result
+
+# Reject the new Promise.
+deferred.reject error
 ```
 
-### Promise.defer()
-
-Create a pending `Promise` that is resolved manually.
-
-Returns an object literal that looks like:
+Alternatively, pass a `Function` that can call either `resolve` or `reject`.
 
 ```coffee
-deferred = {
-  promise # A new Promise!
-  resolve # A bound function that resolves the new Promise.
-  reject  # A bound function that rejects the new Promise.
-}
+promise = Promise.defer (resolve, reject) ->
+  # Call either `resolve` or `reject` to resolve the returned Promise.
 ```
 
-### Promise.wrap(func)
+&nbsp;
+
+### Promise.wrap
 
 Wrap a `Function` with a call to `Promise.try`.
 
@@ -126,81 +117,92 @@ The value returned by your `Function` will attempt to be resolved into a fulfill
 
 ```coffee
 func = Promise.wrap (a, b, c) ->
-  # Do something here.
+  # ...
 
-# Now you always get a Promise back.
-promise = func 1, 2, 3
+promise = func a, b, c
 ```
 
-### Promise.ify(func)
+&nbsp;
+
+### Promise.ify
 
 Takes a `Function` that expects an `(error, result)` callback.
 
 Returns a `Function` that always returns a `Promise`.
 
 ```coffee
-# Convert an (error, result) callback into a Promise constructor.
-func = Promise.ify (callback) ->
+#
+# Before
+#
+
+orig = (callback) ->
   callback error, result
 
-# Now you always get a Promise back.
+orig (error, result) ->
+  # ...
+
+#
+# After
+#
+
+func = Promise.ify orig
+
 promise = func()
 ```
 
-### Promise.all(array)
+&nbsp;
 
-Convert all values in the given `Array` into `Promise`s.
-
-Wait for the converted `Promise`s to resolve, then we can resolve the root `Promise`.
-
-If any converted `Promise` is rejected, the root `Promise` is rejected.
+### Promise.all
 
 ```coffee
-promise = Promise.all []
-.then -> # All of the promises are fulfilled!
-.fail -> # One of the promises was rejected!
+promise = Promise.all values
 ```
 
-### Promise.map(iterable, iterator)
+Wrap all values in an `Array` with `Promise()`.
 
-Iterate over an `Array` or `Object`.
+The returned `Promise` is:
+- fulfilled when **all** of its promises are fulfilled.
+- rejected when **any** of its promises are rejected.
 
-Each call to `iterator` is wrapped by `Promise.try()`.
+&nbsp;
 
-An array of `Promise`s is then passed to `Promise.all`!
+### Promise.map
+
+```coffee
+promise = Promise.map iterable, iterator
+```
+
+Iterate over an `Array` or `Object`, wrapping each item with `Promise.try()`.
 
 Iteration over `Object.create(null)` is also supported!
 
-```coffee
-promise = Promise.map {}, (value, key) ->
-  # Return a Promise or any other value.
-  # Or throw an error to reject the root promise!
-.then -> # All of the promises are fulfilled!
-.fail -> # One of the promises was rejected!
-```
+The returned `Promise` is:
+- fulfilled when **all** of its promises are fulfilled.
+- rejected when **any** of its promises are rejected.
 
-### Promise.isFulfilled(value)
+&nbsp;
 
-Returns `true` when the given value is a fulfilled `Promise`.
+### Checking the state of a Promise
 
 ```coffee
+# Equals true if the Promise is neither fulfilled or rejected.
+promise.isPending
+
+# Equals true if the Promise was resolved without error.
+promise.isFulfilled
+
+# Equals true if the Promise caught an error.
+promise.isRejected
+
+# Returns true when the given value is a pending Promise.
+Promise.isPending value
+
+# Returns true when the given value is a fulfilled Promise.
 Promise.isFulfilled value
-```
 
-### Promise.isRejected(value)
-
-Returns `true` when the given value is a rejected `Promise`.
-
+# Returns true when the given value is a rejected Promise.
 If the given value is not a `Promise`, the returned value is `true`.
-
-```coffee
 Promise.isRejected value
 ```
 
-### Promise.isPending(value)
-
-Returns `true` when the given value is a pending `Promise`.
-
-```coffee
-Promise.isPending value
-```
+&nbsp;

@@ -89,6 +89,9 @@ type.definePrototype({
 });
 
 type.defineMethods({
+  trace: function() {
+    return this._tracers.init && this._tracers.init()[1].stack;
+  },
   inspect: function() {
     var data;
     data = {
@@ -352,10 +355,15 @@ type.defineStatics({
     }
     return value.isPending;
   },
-  defer: function() {
+  defer: function(resolver) {
     var promise;
+    assertType(resolver, Function.Maybe);
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("Promise.defer()"));
+    if (resolver) {
+      promise._tryResolving(resolver);
+      return promise;
+    }
     return {
       promise: promise,
       resolve: function(result) {
@@ -365,14 +373,6 @@ type.defineStatics({
         return promise._reject(error);
       }
     };
-  },
-  resolve: function(resolver) {
-    var promise;
-    assertType(resolver, Function);
-    promise = Promise(PENDING);
-    isDev && (promise._tracers.init = Tracer("Promise.resolve()"));
-    promise._tryResolving(resolver);
-    return promise;
   },
   reject: function(error) {
     var promise;

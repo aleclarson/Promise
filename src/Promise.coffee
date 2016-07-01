@@ -56,6 +56,9 @@ type.definePrototype
 
 type.defineMethods
 
+  trace: ->
+    @_tracers.init and @_tracers.init()[1].stack
+
   inspect: ->
     data = { @state }
     if @isFulfilled
@@ -321,19 +324,16 @@ type.defineStatics
     return no if not isType value, Promise
     return value.isPending
 
-  defer: ->
+  defer: (resolver) ->
+    assertType resolver, Function.Maybe
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "Promise.defer()"
+    if resolver
+      promise._tryResolving resolver
+      return promise
     promise: promise
     resolve: (result) -> promise._tryFulfilling result
     reject: (error) -> promise._reject error
-
-  resolve: (resolver) ->
-    assertType resolver, Function
-    promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.resolve()"
-    promise._tryResolving resolver
-    return promise
 
   reject: (error) ->
     assertType error, Error.Kind
