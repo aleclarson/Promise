@@ -64,7 +64,7 @@ resolved, none of the passed functions will ever be called.
 promise.fail onRejected
 ```
 
-Wait until this `Promise` is rejected, then call the given `Function`.
+Wait until `promise` is rejected, then call `onRejected` with an `Error`.
 
 &nbsp;
 
@@ -75,6 +75,8 @@ promise.always onResolved
 ```
 
 Wait until this `Promise` is resolved, then call the given `Function`.
+
+The `onResolved` function is passed `(error, result, meta...)`, where `error` equals `null` when everything goes well.
 
 Unless this `Promise` is never resolved, `onResolved` will always be called!
 
@@ -98,57 +100,13 @@ deferred.resolve result
 deferred.reject error
 ```
 
-Alternatively, pass a `Function` that can call either `resolve` or `reject`.
+Alternatively, you can pass in a `Function`.
 
 ```coffee
-promise = Promise.defer (resolve, reject) ->
-  # Call either `resolve` or `reject` to resolve the returned Promise.
+promise = Promise.defer resolver
 ```
 
-&nbsp;
-
-### Promise.wrap
-
-Wrap a `Function` with a call to `Promise.try`.
-
-This means the `Function` can throw an `Error` to reject the returned `Promise`.
-
-The value returned by your `Function` will attempt to be resolved into a fulfilled `Promise`.
-
-```coffee
-func = Promise.wrap (a, b, c) ->
-  # ...
-
-promise = func a, b, c
-```
-
-&nbsp;
-
-### Promise.ify
-
-Takes a `Function` that expects an `(error, result)` callback.
-
-Returns a `Function` that always returns a `Promise`.
-
-```coffee
-#
-# Before
-#
-
-orig = (callback) ->
-  callback error, result
-
-orig (error, result) ->
-  # ...
-
-#
-# After
-#
-
-func = Promise.ify orig
-
-promise = func()
-```
+The `resolver` function is passed `(resolve, reject)` and should call one or the other.
 
 &nbsp;
 
@@ -182,6 +140,65 @@ The returned `Promise` is:
 
 &nbsp;
 
+### Promise.chain
+
+```coffee
+promise = Promise.chain iterable, iterator
+```
+
+Works exactly like `Promise.map`, except each iteration must be
+resolved before the next iteration takes place.
+
+&nbsp;
+
+### Promise.wrap
+
+Wrap a `Function` with a call to `Promise.try`.
+
+This means the `Function` can throw an `Error` to reject the returned `Promise`.
+
+The value returned by your `Function` will attempt to be resolved into a fulfilled `Promise`.
+
+```coffee
+obj = {}
+obj.foo = 1
+obj.method = Promise.wrap (bar) -> @foo + bar
+
+promise = obj.method 2
+promise.then (result) ->
+  console.log result # => 3
+```
+
+&nbsp;
+
+### Promise.ify
+
+Takes a `Function` that expects an `(error, result)` callback.
+
+Returns a `Function` that always returns a `Promise`.
+
+```coffee
+#
+# Before
+#
+
+orig = (callback) ->
+  callback error, result
+
+orig (error, result) ->
+  # ...
+
+#
+# After
+#
+
+func = Promise.ify orig
+
+promise = func()
+```
+
+&nbsp;
+
 ### Checking the state of a Promise
 
 ```coffee
@@ -201,7 +218,7 @@ Promise.isPending value
 Promise.isFulfilled value
 
 # Returns true when the given value is a rejected Promise.
-If the given value is not a `Promise`, the returned value is `true`.
+# If the given value is not a `Promise`, the returned value is `true`.
 Promise.isRejected value
 ```
 

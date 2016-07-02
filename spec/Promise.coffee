@@ -136,15 +136,11 @@ describe "Promise.defer()", ->
 
           done()
 
-describe "Promise.resolve(resolver)", ->
-
-  it "expects `resolver` to be a Function", ->
-    expect -> Promise.resolve null
-      .toThrowError "Expected a Function!"
+describe "Promise.defer(resolver)", ->
 
   it "passes the `resolve` and `reject` functions to `resolver`", (done) ->
 
-    Promise.resolve (resolve, reject) ->
+    Promise.defer (resolve, reject) ->
 
       expect getType resolve
         .toBe Function
@@ -156,7 +152,7 @@ describe "Promise.resolve(resolver)", ->
 
   it "creates a Promise that is resolved by the `resolver`", (done) ->
 
-    promise = Promise.resolve (resolve) -> resolve 1
+    promise = Promise.defer (resolve) -> resolve 1
 
     expect getType promise
       .toBe Promise
@@ -247,99 +243,6 @@ describe "Promise.try(func)", ->
         .toBe 1
 
       done()
-
-describe "Promise.wrap(func)", ->
-
-  it "wraps `func` in a call to Promise.try", (done) ->
-
-    func = Promise.wrap -> 1
-    promise = func()
-
-    immediate ->
-
-      expect promise._values[0]
-        .toBe 1
-
-      done()
-
-  it "catches any error thrown by `func`", (done) ->
-
-    error = FakeError()
-    func = Promise.wrap -> throw error
-    promise = func()
-
-    # Prevent reporting.
-    promise._unhandled = no
-
-    immediate ->
-
-      expect promise._values[0]
-        .toBe error
-
-      done()
-
-  it "waits on any promise returned by `func`", (done) ->
-
-    foo = Promise 1
-    func = Promise.wrap -> foo
-    bar = func()
-
-    # The promise will yield twice.
-    immediate -> immediate ->
-
-      expect bar._values[0]
-        .toBe 1
-
-      done()
-
-describe "Promise.ify(func)", ->
-
-  it "returns a rejected Promise if `callback` passes an error immediately", ->
-
-    error = FakeError()
-    func = Promise.ify (callback) ->
-      callback error
-
-    promise = func()
-    promise._unhandled = no
-
-    expect promise.isRejected
-      .toBe yes
-
-    expect promise._values[0]
-      .toBe error
-
-  it "returns a fulfilled Promise if `callback` passes a result immediately", ->
-
-    func = Promise.ify (callback) ->
-      callback null, 1
-
-    promise = func()
-
-    expect promise._values[0]
-      .toBe 1
-
-  it "returns a pending Promise if `callback` is not called immediately", (done) ->
-
-    func = Promise.ify (callback) ->
-      setTimeout callback, 100
-
-    promise = func()
-
-    expect promise.isPending
-      .toBe yes
-
-    promise.then done
-
-  it "pushes `callback` onto the end of `arguments`", ->
-
-    func = Promise.ify (arg1, callback) ->
-      callback null, arg1
-
-    promise = func 1
-
-    expect promise._values[0]
-      .toBe 1
 
 describe "Promise.all(array)", ->
 
@@ -459,6 +362,99 @@ describe "Promise.chain(array)", ->
       return deferred.promise
 
     .then -> done()
+
+describe "Promise.wrap(func)", ->
+
+  it "wraps `func` in a call to Promise.try", (done) ->
+
+    func = Promise.wrap -> 1
+    promise = func()
+
+    immediate ->
+
+      expect promise._values[0]
+        .toBe 1
+
+      done()
+
+  it "catches any error thrown by `func`", (done) ->
+
+    error = FakeError()
+    func = Promise.wrap -> throw error
+    promise = func()
+
+    # Prevent reporting.
+    promise._unhandled = no
+
+    immediate ->
+
+      expect promise._values[0]
+        .toBe error
+
+      done()
+
+  it "waits on any promise returned by `func`", (done) ->
+
+    foo = Promise 1
+    func = Promise.wrap -> foo
+    bar = func()
+
+    # The promise will yield twice.
+    immediate -> immediate ->
+
+      expect bar._values[0]
+        .toBe 1
+
+      done()
+
+describe "Promise.ify(func)", ->
+
+  it "returns a rejected Promise if `callback` passes an error immediately", ->
+
+    error = FakeError()
+    func = Promise.ify (callback) ->
+      callback error
+
+    promise = func()
+    promise._unhandled = no
+
+    expect promise.isRejected
+      .toBe yes
+
+    expect promise._values[0]
+      .toBe error
+
+  it "returns a fulfilled Promise if `callback` passes a result immediately", ->
+
+    func = Promise.ify (callback) ->
+      callback null, 1
+
+    promise = func()
+
+    expect promise._values[0]
+      .toBe 1
+
+  it "returns a pending Promise if `callback` is not called immediately", (done) ->
+
+    func = Promise.ify (callback) ->
+      setTimeout callback, 100
+
+    promise = func()
+
+    expect promise.isPending
+      .toBe yes
+
+    promise.then done
+
+  it "pushes `callback` onto the end of `arguments`", ->
+
+    func = Promise.ify (arg1, callback) ->
+      callback null, arg1
+
+    promise = func 1
+
+    expect promise._values[0]
+      .toBe 1
 
 describe "promise.then(onFulfilled, onRejected)", ->
 

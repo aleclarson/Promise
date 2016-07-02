@@ -98,10 +98,23 @@ type.defineMethods
     assertType onResolved, Function
 
     promise = Promise PENDING
-
     isDev and promise._tracers.init = Tracer "promise.always()"
 
     @_always promise, onResolved
+    return promise
+
+  assert: (reason, predicate) ->
+
+    assertType reason, String
+    assertType predicate, Function.Maybe
+
+    promise = Promise PENDING
+    isDev and promise._tracers.init = Tracer "promise.assert()"
+
+    predicate ?= emptyFunction.thatReturnsArgument
+    @_then promise, (result) ->
+      predicate(result) or throw Error(reason)
+      return result
 
     return promise
 
@@ -289,7 +302,7 @@ type.defineMethods
       return
 
     resolver = result and result.then
-    if typeof resolver is "function"
+    if isType resolver, Function
       @_tryResolving bind.func resolver, result
       return
 
@@ -331,9 +344,11 @@ type.defineStatics
     if resolver
       promise._tryResolving resolver
       return promise
-    promise: promise
-    resolve: (result) -> promise._tryFulfilling result
-    reject: (error) -> promise._reject error
+    return {
+      promise
+      resolve: bind.method promise, "_tryFulfilling"
+      reject: bind.method promise, "_reject"
+    }
 
   reject: (error) ->
     assertType error, Error.Kind
@@ -367,18 +382,6 @@ type.defineStatics
         else promise._fulfill result
       func.apply this, arguments # TODO: Wrap this in try/catch?
       return promise
-
-  assert: (reason, invariant) ->
-    assertType reason, String.Maybe
-    assertType invariant, [ Promise, Boolean, Function ]
-    if isType invariant, Boolean
-      return Promise() if invariant
-      return Promise.reject Error reason
-    else if isType invariant, Function
-      invariant = Promise.try invariant
-    return invariant.then (invariant) ->
-      return if invariant
-      throw Error reason
 
   all: (array) ->
 

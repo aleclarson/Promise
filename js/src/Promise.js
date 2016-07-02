@@ -135,6 +135,23 @@ type.defineMethods({
     this._always(promise, onResolved);
     return promise;
   },
+  assert: function(reason, predicate) {
+    var promise;
+    assertType(reason, String);
+    assertType(predicate, Function.Maybe);
+    promise = Promise(PENDING);
+    isDev && (promise._tracers.init = Tracer("promise.assert()"));
+    if (predicate == null) {
+      predicate = emptyFunction.thatReturnsArgument;
+    }
+    this._then(promise, function(result) {
+      predicate(result) || (function() {
+        throw Error(reason);
+      })();
+      return result;
+    });
+    return promise;
+  },
   _then: function(promise, onFulfilled, onRejected) {
     assertType(promise, Promise);
     assertType(onFulfilled, Function.Maybe);
@@ -316,7 +333,7 @@ type.defineMethods({
       return;
     }
     resolver = result && result.then;
-    if (typeof resolver === "function") {
+    if (isType(resolver, Function)) {
       this._tryResolving(bind.func(resolver, result));
       return;
     }
@@ -366,12 +383,8 @@ type.defineStatics({
     }
     return {
       promise: promise,
-      resolve: function(result) {
-        return promise._tryFulfilling(result);
-      },
-      reject: function(error) {
-        return promise._reject(error);
-      }
+      resolve: bind.method(promise, "_tryFulfilling"),
+      reject: bind.method(promise, "_reject")
     };
   },
   reject: function(error) {
@@ -419,24 +432,6 @@ type.defineStatics({
       func.apply(this, arguments);
       return promise;
     };
-  },
-  assert: function(reason, invariant) {
-    assertType(reason, String.Maybe);
-    assertType(invariant, [Promise, Boolean, Function]);
-    if (isType(invariant, Boolean)) {
-      if (invariant) {
-        return Promise();
-      }
-      return Promise.reject(Error(reason));
-    } else if (isType(invariant, Function)) {
-      invariant = Promise["try"](invariant);
-    }
-    return invariant.then(function(invariant) {
-      if (invariant) {
-        return;
-      }
-      throw Error(reason);
-    });
   },
   all: function(array) {
     var fulfill, length, promise, reject, remaining, results;
