@@ -39,4 +39,4 @@ type.defineMethods({
 
 module.exports = type.build();
 
-//# sourceMappingURL=../../map/src/QueueItem.map
+//# sourceMappingURL=map/QueueItem.map

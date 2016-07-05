@@ -415,21 +415,27 @@ type.defineStatics({
     };
   },
   ify: function(func) {
-    var push;
     assertType(func, Function);
-    push = Array.prototype.push;
     return function() {
-      var promise;
+      var arg, args, i, len, promise, self;
+      self = this;
+      args = [];
+      for (i = 0, len = arguments.length; i < len; i++) {
+        arg = arguments[i];
+        args.push(arg);
+      }
       promise = Promise(PENDING);
       isDev && (promise._tracers.init = Tracer("Promise.ify()"));
-      push.call(arguments, function(error, result) {
-        if (error) {
-          return promise._reject(error);
-        } else {
-          return promise._fulfill(result);
-        }
+      promise._tryResolving(function(resolve, reject) {
+        args.push(function(error, result) {
+          if (error) {
+            return reject(error);
+          } else {
+            return resolve(result);
+          }
+        });
+        return func.apply(self, args);
       });
-      func.apply(this, arguments);
       return promise;
     };
   },
@@ -514,4 +520,4 @@ type.defineStatics({
 
 module.exports = Promise = type.build();
 
-//# sourceMappingURL=../../map/src/Promise.map
+//# sourceMappingURL=map/Promise.map

@@ -372,15 +372,23 @@ type.defineStatics
       return promise
 
   ify: (func) ->
+
     assertType func, Function
-    push = Array::push
+
     return ->
+      self = this
+      args = []
+      args.push arg for arg in arguments
+
       promise = Promise PENDING
       isDev and promise._tracers.init = Tracer "Promise.ify()"
-      push.call arguments, (error, result) ->
-        if error then promise._reject error
-        else promise._fulfill result
-      func.apply this, arguments # TODO: Wrap this in try/catch?
+
+      promise._tryResolving (resolve, reject) ->
+        args.push (error, result) ->
+          if error then reject error
+          else resolve result
+        func.apply self, args
+
       return promise
 
   all: (array) ->
