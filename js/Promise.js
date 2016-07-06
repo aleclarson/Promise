@@ -1,10 +1,8 @@
-var FULFILLED, PENDING, Promise, PureObject, QueueItem, REJECTED, Tracer, Type, assert, assertType, bind, emptyFunction, hasKeys, immediate, isType, spliceArray, sync, type;
+var FULFILLED, PENDING, Promise, PureObject, REJECTED, Tracer, Type, assert, assertType, bind, emptyFunction, has, hasKeys, immediate, isType, sync, type;
 
 require("isDev");
 
 emptyFunction = require("emptyFunction");
-
-spliceArray = require("spliceArray");
 
 PureObject = require("PureObject");
 
@@ -20,13 +18,13 @@ isType = require("isType");
 
 assert = require("assert");
 
-bind = require("bind");
+Type = require("Type");
 
 sync = require("sync");
 
-Type = require("Type");
+bind = require("bind");
 
-QueueItem = require("./QueueItem");
+has = require("has");
 
 PENDING = Symbol("Promise.PENDING");
 
@@ -39,21 +37,19 @@ type = Type("Promise");
 type.defineValues({
   _state: PENDING,
   _unhandled: true,
-  _values: function() {
+  _results: function() {
     return [void 0];
   },
   _queue: function() {
     return [];
   },
-  _tracers: function() {
-    if (isDev) {
-      return {};
-    }
+  _tracers: isDev && function() {
+    return {};
   }
 });
 
 type.initInstance(function(result) {
-  this._inheritValues(arguments, 1);
+  this._inherit(arguments, 1);
   if (result !== PENDING) {
     return this._tryFulfilling(result);
   }
@@ -93,27 +89,24 @@ type.defineMethods({
     return this._tracers.init && this._tracers.init()[1].stack;
   },
   inspect: function() {
-    var data;
-    data = {
+    var promise;
+    promise = {
       state: this.state
     };
     if (this.isFulfilled) {
-      data.value = this._values[0];
+      promise.value = this._results[0];
     } else if (this.isRejected) {
-      data.error = this._values[0];
+      promise.error = this._results[0];
     }
-    if (this._values.length > 1) {
-      data.meta = this._values.slice(1);
+    if (this._results.length > 1) {
+      promise.meta = this._results.slice(1);
     }
-    return data;
+    return promise;
   },
   then: function(onFulfilled, onRejected) {
     var promise;
     assertType(onFulfilled, Function.Maybe);
     assertType(onRejected, Function.Maybe);
-    if (!this._canResolve(onFulfilled, onRejected)) {
-      return this;
-    }
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("promise.then()"));
     this._then(promise, onFulfilled, onRejected);
@@ -132,7 +125,28 @@ type.defineMethods({
     assertType(onResolved, Function);
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("promise.always()"));
-    this._always(promise, onResolved);
+    this._always(function(parent) {
+      var error, value;
+      try {
+        value = onResolved();
+      } catch (error1) {
+        error = error1;
+        promise._reject(error);
+        return;
+      }
+      if (isType(value, Promise)) {
+        return value._always(function() {
+          if (value.isRejected) {
+            return promise._reject(value._results[0]);
+          } else {
+            promise._inherit(parent._results, 1);
+            return promise._resolve(parent);
+          }
+        });
+      }
+      promise._inherit(parent._results, 1);
+      return promise._resolve(parent);
+    });
     return promise;
   },
   assert: function(reason, predicate) {
@@ -145,211 +159,163 @@ type.defineMethods({
       predicate = emptyFunction.thatReturnsArgument;
     }
     this._then(promise, function(result) {
-      predicate(result) || (function() {
+      if (!predicate(result)) {
         throw Error(reason);
-      })();
+      }
       return result;
     });
     return promise;
+  },
+  _inherit: function(results, offset) {
+    var index, length;
+    assertType(results, [Array, Object]);
+    length = results.length;
+    if (offset >= length) {
+      return;
+    }
+    index = offset - 1;
+    while (++index < length) {
+      this._results.push(results[index]);
+    }
+  },
+  _resolve: function(parent, onFulfilled, onRejected) {
+    assertType(parent, Promise);
+    assertType(onFulfilled, Function.Maybe);
+    assertType(onRejected, Function.Maybe);
+    assert(!parent.isPending, "The parent Promise must be resolved!");
+    if (!this.isPending) {
+      return;
+    }
+    if (parent.isFulfilled) {
+      if (onFulfilled) {
+        return this._tryResolving(onFulfilled, parent._results);
+      }
+      return this._fulfill(parent._results[0]);
+    }
+    if (onRejected) {
+      return this._tryResolving(onRejected, parent._results);
+    }
+    return this._reject(parent._results[0]);
+  },
+  _fulfill: function(value) {
+    var length, queue;
+    assert(!isType(value, Promise), "Cannot fulfill with a Promise as the result!");
+    if (!this.isPending) {
+      return;
+    }
+    this._state = FULFILLED;
+    this._results[0] = value;
+    length = (queue = this._queue).length;
+    this._queue = null;
+    if (!length) {
+      return;
+    }
+    return immediate(this, function() {
+      var index;
+      index = -1;
+      while (++index < length) {
+        queue[index].fulfill(this);
+      }
+    });
+  },
+  _reject: function(error) {
+    var queue;
+    assertType(error, Error.Kind);
+    if (!this.isPending) {
+      return;
+    }
+    this._state = REJECTED;
+    this._results[0] = error;
+    queue = this._queue;
+    this._queue = null;
+    return immediate(this, function() {
+      var index, length;
+      index = -1;
+      if (this._unhandled) {
+        length = (queue = Promise._rejectFallbacks).length;
+        while (++index < length) {
+          queue[index](error, this);
+        }
+        return;
+      }
+      length = queue.length;
+      while (++index < length) {
+        queue[index].reject(this);
+      }
+    });
+  },
+  _tryFulfilling: function(value) {
+    var resolver;
+    if (isType(value, Promise)) {
+      return value._always((function(_this) {
+        return function() {
+          _this._inherit(value._results, 1);
+          return _this._resolve(value);
+        };
+      })(this));
+    }
+    resolver = value && value.then;
+    if (isType(resolver, Function)) {
+      this._defer(bind.func(resolver, value));
+      return;
+    }
+    this._fulfill(value);
+  },
+  _tryResolving: function(resolver, args) {
+    assertType(resolver, Function);
+    assertType(args, Array.Maybe);
+    return immediate(this, function() {
+      var error, value;
+      try {
+        value = resolver.apply(null, args);
+      } catch (error1) {
+        error = error1;
+        return this._reject(error);
+      }
+      assert(value !== this, "Cannot resolve a Promise with itself!");
+      return this._tryFulfilling(value);
+    });
   },
   _then: function(promise, onFulfilled, onRejected) {
     assertType(promise, Promise);
     assertType(onFulfilled, Function.Maybe);
     assertType(onRejected, Function.Maybe);
+    return this._always(function(parent) {
+      return promise._resolve(parent, onFulfilled, onRejected);
+    });
+  },
+  _always: function(onResolved) {
+    assertType(onResolved, Function);
     this._unhandled = false;
-    if (this.isPending) {
-      this._queue.push(QueueItem(promise, onFulfilled, onRejected));
-      return;
-    }
-    if (this.isFulfilled) {
-      this._thenResolve(promise, onFulfilled);
-      return;
-    }
-    this._thenResolve(promise, onRejected);
-  },
-  _thenResolve: function(promise, resolver) {
-    assertType(promise, Promise);
-    assertType(resolver, Function.Maybe);
-    assert(!this.isPending, "Cannot use a pending Promise to resolve another Promise!");
-    assert(promise.isPending, "Cannot resolve a Promise that is not pending!");
-    if (resolver) {
-      isDev && (promise._tracers.resolve = Tracer("Promise::_thenResolve()"));
-      immediate((function(_this) {
-        return function() {
-          return promise._resolve(_this._values, resolver);
-        };
-      })(this));
-      return;
-    }
-    if (this.isFulfilled) {
-      promise._fulfill(this._values[0]);
-      return;
-    }
-    promise._reject(this._values[0]);
-  },
-  _always: function(promise, onResolved) {
-    var onFulfilled, onRejected, resolve;
-    assertType(promise, Promise);
-    assertType(arguments[1], Function.Maybe);
-    onResolved && (resolve = (function(_this) {
-      return function(args) {
-        var deferred, result;
-        result = onResolved.apply(null, args);
-        if (!isType(result, Promise)) {
-          return FULFILLED;
-        }
-        if (result.isFulfilled) {
-          return FULFILLED;
-        }
-        if (result.isRejected) {
-          throw result.error;
-        }
-        deferred = Promise(PENDING);
-        result._queue.push(QueueItem(deferred, function() {
-          deferred._inheritValues(_this._values, 1);
-          if (_this.isFulfilled) {
-            return _this._values[0];
-          }
-          throw _this._values[0];
-        }));
-        return deferred;
-      };
-    })(this));
-    onFulfilled = (function(_this) {
-      return function() {
-        var result;
-        if (onResolved) {
-          spliceArray(arguments, 0, 0, null);
-          result = resolve(arguments);
-          if (result !== FULFILLED) {
-            return result;
-          }
-        }
-        promise._inheritValues(_this._values, 1);
-        return _this._values[0];
-      };
-    })(this);
-    onRejected = (function(_this) {
-      return function() {
-        var result;
-        if (onResolved) {
-          spliceArray(arguments, 1, 0, null);
-          result = resolve(arguments);
-          if (result !== FULFILLED) {
-            return result;
-          }
-        }
-        promise._inheritValues(_this._values, 1);
-        throw _this._values[0];
-      };
-    })(this);
-    this._then(promise, onFulfilled, onRejected);
-  },
-  _inheritValues: function(values, startIndex) {
-    var index, length;
-    assertType(values, [Array, Object]);
-    length = values.length;
-    if (startIndex >= length) {
-      return;
-    }
-    index = startIndex - 1;
-    while (++index < length) {
-      this._values.push(values[index]);
-    }
-  },
-  _canResolve: function(onFulfilled, onRejected) {
-    if (this.isFulfilled && !isType(onFulfilled, Function)) {
-      return false;
-    }
-    if (this.isRejected && !isType(onRejected, Function)) {
-      return false;
-    }
-    return true;
-  },
-  _fulfill: function(value) {
-    var i, item, len, ref;
     if (!this.isPending) {
-      return;
+      return immediate(this, function() {
+        return onResolved(this);
+      });
     }
-    assert(!isType(value, Promise), "Cannot fulfill with a Promise as the result!");
-    this._state = FULFILLED;
-    this._values[0] = value;
-    if (this._queue.length) {
-      ref = this._queue;
-      for (i = 0, len = ref.length; i < len; i++) {
-        item = ref[i];
-        item.fulfill(this);
+    return this._queue.push({
+      fulfill: onResolved,
+      reject: onResolved
+    });
+  },
+  _defer: function(resolver) {
+    var reject, resolve;
+    assertType(resolver, Function);
+    if (resolver.length) {
+      resolve = bind.method(this, "_tryFulfilling");
+      if (resolver.length > 1) {
+        reject = bind.method(this, "_reject");
       }
     }
-    this._queue = null;
-  },
-  _reject: function(error) {
-    var i, item, len, ref;
-    if (!this.isPending) {
-      return;
-    }
-    assertType(error, Error.Kind);
-    this._state = REJECTED;
-    this._values[0] = error;
-    if (this._unhandled) {
-      immediate((function(_this) {
-        return function() {
-          if (!_this._unhandled) {
-            return;
-          }
-          return Promise._onUnhandledRejection(error, _this);
-        };
-      })(this));
-    }
-    if (this._queue.length) {
-      ref = this._queue;
-      for (i = 0, len = ref.length; i < len; i++) {
-        item = ref[i];
-        item.reject(this);
+    immediate(this, function() {
+      var error;
+      try {
+        return resolver(resolve, reject);
+      } catch (error1) {
+        error = error1;
+        return this._reject(error);
       }
-    }
-    this._queue = null;
-  },
-  _resolve: function(args, resolver) {
-    var error, result;
-    if (args != null) {
-      assertType(args, Array);
-    }
-    assertType(resolver, Function);
-    try {
-      result = resolver.apply(null, args);
-      assert(result !== this, "Cannot resolve a Promise with itself!");
-    } catch (error1) {
-      error = error1;
-      this._reject(error);
-      return;
-    }
-    this._tryFulfilling(result);
-  },
-  _tryFulfilling: function(result) {
-    var resolver;
-    if (isType(result, Promise)) {
-      result._always(this);
-      return;
-    }
-    resolver = result && result.then;
-    if (isType(resolver, Function)) {
-      this._tryResolving(bind.func(resolver, result));
-      return;
-    }
-    this._fulfill(result);
-  },
-  _tryResolving: function(resolver) {
-    var error, reject, resolve;
-    assertType(resolver, Function);
-    reject = bind.method(this, "_reject");
-    resolve = bind.method(this, "_tryFulfilling");
-    try {
-      resolver(resolve, reject);
-    } catch (error1) {
-      error = error1;
-      reject(error);
-    }
+    });
+    return this;
   }
 });
 
@@ -378,8 +344,7 @@ type.defineStatics({
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("Promise.defer()"));
     if (resolver) {
-      promise._tryResolving(resolver);
-      return promise;
+      return promise._defer(resolver);
     }
     return {
       promise: promise,
@@ -400,34 +365,29 @@ type.defineStatics({
     assertType(func, Function);
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("Promise.try()"));
-    immediate(function() {
-      return promise._resolve(null, func);
-    });
+    promise._tryResolving(func);
     return promise;
   },
   wrap: function(func) {
     assertType(func, Function);
     return function() {
       var promise;
-      promise = Promise["try"](bind.func(func, this, arguments));
+      promise = Promise(PENDING);
       isDev && (promise._tracers.init = Tracer("Promise.wrap()"));
+      promise._tryResolving(bind.func(func, this, arguments));
       return promise;
     };
   },
   ify: function(func) {
     assertType(func, Function);
     return function() {
-      var arg, args, i, len, promise, self;
+      var args, promise, self;
       self = this;
-      args = [];
-      for (i = 0, len = arguments.length; i < len; i++) {
-        arg = arguments[i];
-        args.push(arg);
-      }
+      args = arguments;
       promise = Promise(PENDING);
       isDev && (promise._tracers.init = Tracer("Promise.ify()"));
-      promise._tryResolving(function(resolve, reject) {
-        args.push(function(error, result) {
+      return promise._defer(function(resolve, reject) {
+        Array.prototype.push.call(args, function(error, result) {
           if (error) {
             return reject(error);
           } else {
@@ -436,7 +396,6 @@ type.defineStatics({
         });
         return func.apply(self, args);
       });
-      return promise;
     };
   },
   all: function(array) {
@@ -485,10 +444,9 @@ type.defineStatics({
     }
     reject = bind.method(promise, "_reject");
     fulfill = function(result, key) {
-      if (!promise.isPending) {
+      if (has(results, key)) {
         return;
       }
-      assertType(key, [String, Number]);
       results[key] = result;
       remaining -= 1;
       if (remaining === 0) {
@@ -496,14 +454,14 @@ type.defineStatics({
       }
     };
     remaining = 0;
-    sync.each(iterable, function(result, key) {
-      var deferred;
+    sync.each(iterable, function(value, key) {
+      var item;
       remaining += 1;
-      deferred = Promise["try"](function() {
-        return iterator.call(null, result, key);
+      item = Promise["try"](function() {
+        return iterator.call(null, value, key);
       });
-      deferred._values.push(key);
-      deferred.then(fulfill, reject);
+      item._results.push(key);
+      item.then(fulfill, reject);
     });
     return promise;
   },
@@ -515,7 +473,20 @@ type.defineStatics({
       });
     });
   },
-  _onUnhandledRejection: emptyFunction
+  onUnhandledRejection: function(fallback) {
+    this._rejectFallbacks.push(fallback);
+  },
+  _onUnhandledRejection: {
+    get: function() {
+      return emptyFunction;
+    },
+    set: function() {
+      var error;
+      error = Error("'Promise._onUnhandledRejection' is deprecated!");
+      return console.log("\n" + error.stack);
+    }
+  },
+  _rejectFallbacks: []
 });
 
 module.exports = Promise = type.build();

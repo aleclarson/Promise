@@ -2,7 +2,6 @@
 require "isDev"
 
 emptyFunction = require "emptyFunction"
-spliceArray = require "spliceArray"
 PureObject = require "PureObject"
 assertType = require "assertType"
 immediate = require "immediate"
@@ -10,11 +9,10 @@ hasKeys = require "hasKeys"
 Tracer = require "tracer"
 isType = require "isType"
 assert = require "assert"
-bind = require "bind"
-sync = require "sync"
 Type = require "Type"
-
-QueueItem = require "./QueueItem"
+sync = require "sync"
+bind = require "bind"
+has = require "has"
 
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
@@ -28,14 +26,14 @@ type.defineValues
 
   _unhandled: yes
 
-  _values: -> [ undefined ]
+  _results: -> [ undefined ]
 
   _queue: -> []
 
-  _tracers: -> {} if isDev
+  _tracers: isDev and -> {}
 
 type.initInstance (result) ->
-  @_inheritValues arguments, 1
+  @_inherit arguments, 1
   @_tryFulfilling result if result isnt PENDING
 
 type.definePrototype
@@ -60,22 +58,24 @@ type.defineMethods
     @_tracers.init and @_tracers.init()[1].stack
 
   inspect: ->
-    data = { @state }
+
+    promise = { @state }
+
     if @isFulfilled
-      data.value = @_values[0]
+      promise.value = @_results[0]
+
     else if @isRejected
-      data.error = @_values[0]
-    if @_values.length > 1
-      data.meta = @_values.slice 1
-    return data
+      promise.error = @_results[0]
+
+    if @_results.length > 1
+      promise.meta = @_results.slice 1
+
+    return promise
 
   then: (onFulfilled, onRejected) ->
 
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
-
-    if not @_canResolve onFulfilled, onRejected
-      return this
 
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "promise.then()"
@@ -100,7 +100,30 @@ type.defineMethods
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "promise.always()"
 
-    @_always promise, onResolved
+    @_always (parent) ->
+
+      try value = onResolved()
+      catch error
+        promise._reject error
+        return
+
+      if isType value, Promise
+        return value._always ->
+          if value.isRejected
+            promise._reject value._results[0]
+          else
+            promise._inherit parent._results, 1
+            promise._resolve parent
+
+      # TODO: Support "thenables" returned by `always` callbacks.
+      # resolver = value and value.then
+      # if isType resolver, Function
+      #   promise._defer bind.func resolver, value
+      #   return
+
+      promise._inherit parent._results, 1
+      promise._resolve parent
+
     return promise
 
   assert: (reason, predicate) ->
@@ -113,215 +136,151 @@ type.defineMethods
 
     predicate ?= emptyFunction.thatReturnsArgument
     @_then promise, (result) ->
-      predicate(result) or throw Error(reason)
+      if not predicate result
+        throw Error reason
       return result
 
     return promise
 
-  # The only difference from 'this.then'
-  # is that a Promise must be passed.
+  _inherit: (results, offset) ->
+
+    assertType results, [ Array, Object ]
+
+    { length } = results
+    return if offset >= length
+
+    index = offset - 1
+    @_results.push results[index] while ++index < length
+    return
+
+  _resolve: (parent, onFulfilled, onRejected) ->
+
+    assertType parent, Promise
+    assertType onFulfilled, Function.Maybe
+    assertType onRejected, Function.Maybe
+
+    assert not parent.isPending, "The parent Promise must be resolved!"
+
+    return if not @isPending
+
+    if parent.isFulfilled
+      if onFulfilled
+        return @_tryResolving onFulfilled, parent._results
+      return @_fulfill parent._results[0]
+
+    if onRejected
+      return @_tryResolving onRejected, parent._results
+    return @_reject parent._results[0]
+
+  _fulfill: (value) ->
+
+    assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
+
+    return if not @isPending
+
+    @_state = FULFILLED
+    @_results[0] = value
+
+    {length} = queue = @_queue
+    @_queue = null
+
+    return if not length
+    immediate this, ->
+      index = -1
+      while ++index < length
+        queue[index].fulfill this
+      return
+
+  _reject: (error) ->
+
+    assertType error, Error.Kind
+
+    return if not @isPending
+
+    @_state = REJECTED
+    @_results[0] = error
+
+    queue = @_queue
+    @_queue = null
+
+    immediate this, ->
+      index = -1
+
+      if @_unhandled
+        {length} = queue = Promise._rejectFallbacks
+        while ++index < length
+          queue[index] error, this
+        return
+
+      # If 'this._unhandled' is false, we know
+      # for sure that the queue is not empty.
+      {length} = queue
+      while ++index < length
+        queue[index].reject this
+      return
+
+  _tryFulfilling: (value) ->
+
+    if isType value, Promise
+      return value._always =>
+        @_inherit value._results, 1
+        @_resolve value
+
+    # Support foreign promises.
+    resolver = value and value.then
+    if isType resolver, Function
+      @_defer bind.func resolver, value
+      return
+
+    @_fulfill value
+    return
+
+  _tryResolving: (resolver, args) ->
+    assertType resolver, Function
+    assertType args, Array.Maybe
+    immediate this, ->
+      try value = resolver.apply null, args
+      catch error then return @_reject error
+      assert value isnt this, "Cannot resolve a Promise with itself!"
+      @_tryFulfilling value
+
   _then: (promise, onFulfilled, onRejected) ->
 
     assertType promise, Promise
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
 
+    @_always (parent) ->
+      promise._resolve parent, onFulfilled, onRejected
+
+  _always: (onResolved) ->
+
+    assertType onResolved, Function
+
     @_unhandled = no
 
-    if @isPending
-      @_queue.push QueueItem promise, onFulfilled, onRejected
-      return
+    if not @isPending
+      return immediate this, ->
+        onResolved this
 
-    if @isFulfilled
-      @_thenResolve promise, onFulfilled
-      return
+    @_queue.push
+      fulfill: onResolved
+      reject: onResolved
 
-    @_thenResolve promise, onRejected
-    return
-
-  # Use this Promise to resolve the given Promise.
-  # The 'resolver' is an optional Function.
-  _thenResolve: (promise, resolver) ->
-
-    assertType promise, Promise
-    assertType resolver, Function.Maybe
-
-    assert not @isPending, "Cannot use a pending Promise to resolve another Promise!"
-    assert promise.isPending, "Cannot resolve a Promise that is not pending!"
-
-    if resolver
-      isDev and promise._tracers.resolve = Tracer "Promise::_thenResolve()"
-      immediate => promise._resolve @_values, resolver
-      return
-
-    if @isFulfilled
-      promise._fulfill @_values[0]
-      return
-
-    promise._reject @_values[0]
-    return
-
-  # The only difference from 'this.always'
-  # is that a Promise must be passed.
-  _always: (promise, onResolved) ->
-
-    assertType promise, Promise
-    assertType arguments[1], Function.Maybe
-
-    onResolved and resolve = (args) =>
-
-      result = onResolved.apply null, args
-
-      # Ignore return value of `onResolved`; unless it's a Promise.
-      return FULFILLED if not isType result, Promise
-
-      # Ignore return value of inner promise.
-      return FULFILLED if result.isFulfilled
-
-      # But use any error of inner promise.
-      throw result.error if result.isRejected
-
-      # Create new Promise that resolves when
-      # the inner promise does, but override
-      # the results to match the parent promise.
-      # If the inner promise throws an error,
-      # it is used to reject the outer promise.
-      deferred = Promise PENDING
-      result._queue.push QueueItem deferred, =>
-        deferred._inheritValues @_values, 1
-        return @_values[0] if @isFulfilled
-        throw @_values[0]
-
-      return deferred
-
-    onFulfilled = =>
-
-      if onResolved
-        spliceArray arguments, 0, 0, null
-        result = resolve arguments
-        return result if result isnt FULFILLED
-
-      promise._inheritValues @_values, 1
-      return @_values[0]
-
-    onRejected = =>
-
-      if onResolved
-        spliceArray arguments, 1, 0, null
-        result = resolve arguments
-        return result if result isnt FULFILLED
-
-      promise._inheritValues @_values, 1
-      throw @_values[0]
-
-    @_then promise, onFulfilled, onRejected
-    return
-
-  _inheritValues: (values, startIndex) ->
-
-    assertType values, [ Array, Object ]
-
-    { length } = values
-    return if startIndex >= length
-
-    index = startIndex - 1
-    @_values.push values[index] while ++index < length
-    return
-
-  # If the promise is fulfilled or rejected,
-  # the opposite handler will never be called.
-  _canResolve: (onFulfilled, onRejected) ->
-    return no if @isFulfilled and not isType onFulfilled, Function
-    return no if @isRejected and not isType onRejected, Function
-    return yes
-
-  # Must never be passed a Promise.
-  # Fails gracefully if 'this.isPending' is false.
-  _fulfill: (value) ->
-
-    return if not @isPending
-
-    assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
-
-    @_state = FULFILLED
-    @_values[0] = value
-
-    if @_queue.length
-      for item in @_queue
-        item.fulfill this
-
-    @_queue = null
-    return
-
-  # Must be passed an instanceof Error.
-  # Fails gracefully if 'this.isPending' is false.
-  _reject: (error) ->
-
-    return if not @isPending
-
-    assertType error, Error.Kind
-
-    @_state = REJECTED
-    @_values[0] = error
-
-    if @_unhandled then immediate =>
-      return if not @_unhandled
-      Promise._onUnhandledRejection error, this
-
-    if @_queue.length
-      for item in @_queue
-        item.reject this
-
-    @_queue = null
-    return
-
-  # Wait until the given 'resolver' has a result that isn't a pending Promise.
-  # The given 'args' are applied to the 'resolver'.
-  _resolve: (args, resolver) ->
-
-    assertType args, Array if args?
-    assertType resolver, Function
-
-    try
-      result = resolver.apply null, args
-      assert result isnt this, "Cannot resolve a Promise with itself!"
-
-    catch error
-      @_reject error
-      return
-
-    @_tryFulfilling result
-    return
-
-  # Fulfill this Promise with any value.
-  # If a Promise is passed, use it to resolve this Promise.
-  _tryFulfilling: (result) ->
-
-    if isType result, Promise
-      result._always this
-      return
-
-    resolver = result and result.then
-    if isType resolver, Function
-      @_tryResolving bind.func resolver, result
-      return
-
-    @_fulfill result
-    return
-
-  # Passes 'resolve' and 'reject' to the given 'resolver'.
-  # Any errors thrown by 'resolver' are passed to 'reject'.
-  # Must call 'resolve' to fulfill this promise.
-  _tryResolving: (resolver) ->
+  _defer: (resolver) ->
 
     assertType resolver, Function
 
-    reject = bind.method this, "_reject"
-    resolve = bind.method this, "_tryFulfilling"
+    if resolver.length
+      resolve = bind.method this, "_tryFulfilling"
+      if resolver.length > 1
+        reject = bind.method this, "_reject"
 
-    try resolver resolve, reject
-    catch error then reject error
-    return
+    immediate this, ->
+      try resolver resolve, reject
+      catch error then @_reject error
+
+    return this
 
 type.defineStatics
 
@@ -338,12 +297,15 @@ type.defineStatics
     return value.isPending
 
   defer: (resolver) ->
+
     assertType resolver, Function.Maybe
+
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "Promise.defer()"
+
     if resolver
-      promise._tryResolving resolver
-      return promise
+      return promise._defer resolver
+
     return {
       promise
       resolve: bind.method promise, "_tryFulfilling"
@@ -361,35 +323,33 @@ type.defineStatics
     assertType func, Function
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "Promise.try()"
-    immediate -> promise._resolve null, func
+    promise._tryResolving func
     return promise
 
   wrap: (func) ->
     assertType func, Function
     return ->
-      promise = Promise.try bind.func func, this, arguments
+      promise = Promise PENDING
       isDev and promise._tracers.init = Tracer "Promise.wrap()"
+      promise._tryResolving bind.func func, this, arguments
       return promise
 
   ify: (func) ->
-
     assertType func, Function
-
     return ->
       self = this
-      args = []
-      args.push arg for arg in arguments
+      args = arguments
 
       promise = Promise PENDING
       isDev and promise._tracers.init = Tracer "Promise.ify()"
 
-      promise._tryResolving (resolve, reject) ->
-        args.push (error, result) ->
+      return promise._defer (resolve, reject) ->
+
+        Array::push.call args, (error, result) ->
           if error then reject error
           else resolve result
-        func.apply self, args
 
-      return promise
+        func.apply self, args
 
   all: (array) ->
 
@@ -444,8 +404,7 @@ type.defineStatics
 
     reject = bind.method promise, "_reject"
     fulfill = (result, key) ->
-      return if not promise.isPending
-      assertType key, [ String, Number ]
+      return if has results, key
       results[key] = result
       remaining -= 1
       if remaining is 0
@@ -453,11 +412,11 @@ type.defineStatics
       return
 
     remaining = 0
-    sync.each iterable, (result, key) ->
+    sync.each iterable, (value, key) ->
       remaining += 1
-      deferred = Promise.try -> iterator.call null, result, key
-      deferred._values.push key
-      deferred.then fulfill, reject
+      item = Promise.try -> iterator.call null, value, key
+      item._results.push key
+      item.then fulfill, reject
       return
 
     return promise
@@ -467,7 +426,16 @@ type.defineStatics
     return sync.reduce iterable, Promise(), (chain, value, key) ->
       chain.then -> iterator.call null, value, key
 
-  # A hook for handling unhandled rejections.
-  _onUnhandledRejection: emptyFunction
+  onUnhandledRejection: (fallback) ->
+    @_rejectFallbacks.push fallback
+    return
+
+  _onUnhandledRejection:
+    get: -> emptyFunction
+    set: ->
+      error = Error "'Promise._onUnhandledRejection' is deprecated!"
+      console.log "\n" + error.stack
+
+  _rejectFallbacks: []
 
 module.exports = Promise = type.build()

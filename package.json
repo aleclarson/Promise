@@ -9,12 +9,10 @@
     "assertType": "aleclarson/assertType#1.0.0",
     "bind": "aleclarson/bind#1.0.0",
     "emptyFunction": "aleclarson/emptyFunction#1.0.0",
-    "getArgProp": "aleclarson/getArgProp#1.0.0",
     "hasKeys": "aleclarson/hasKeys#1.0.0",
-    "immediate": "aleclarson/immediate#4.0.0",
+    "immediate": "aleclarson/immediate#4.1.0",
     "isDev": "aleclarson/isDev#1.0.0",
     "isType": "aleclarson/isType#1.0.0",
-    "spliceArray": "aleclarson/spliceArray#1.0.0",
     "sync": "aleclarson/sync#1.0.0",
     "tracer": "aleclarson/tracer#1.0.0"
   },
@@ -22,7 +20,6 @@
     "getType": "aleclarson/getType#1.0.0"
   },
   "lotus": {
-    "specDest": "js/spec",
     "plugins": [
       "lotus-coffee"
     ]
