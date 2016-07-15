@@ -126,6 +126,34 @@ type.defineMethods
 
     return promise
 
+  notify: (callback) ->
+
+    if not callback
+      return this
+
+    assertType callback, Function
+
+    promise = Promise PENDING
+    isDev and promise._tracers.init = Tracer "promise.notify()"
+
+    @_always (parent) ->
+
+      promise._inherit parent._results, 1
+
+      if parent.isRejected
+        error = parent._results[0]
+
+      else if parent.isFulfilled
+        result = parent._results[0]
+
+      try
+        callback error, result
+        promise._resolve parent
+      catch callbackError
+        promise._reject callbackError
+
+    return promise
+
   assert: (reason, predicate) ->
 
     assertType reason, String

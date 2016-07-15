@@ -149,6 +149,32 @@ type.defineMethods({
     });
     return promise;
   },
+  notify: function(callback) {
+    var promise;
+    if (!callback) {
+      return this;
+    }
+    assertType(callback, Function);
+    promise = Promise(PENDING);
+    isDev && (promise._tracers.init = Tracer("promise.notify()"));
+    this._always(function(parent) {
+      var callbackError, error, result;
+      promise._inherit(parent._results, 1);
+      if (parent.isRejected) {
+        error = parent._results[0];
+      } else if (parent.isFulfilled) {
+        result = parent._results[0];
+      }
+      try {
+        callback(error, result);
+        return promise._resolve(parent);
+      } catch (error1) {
+        callbackError = error1;
+        return promise._reject(callbackError);
+      }
+    });
+    return promise;
+  },
   assert: function(reason, predicate) {
     var promise;
     assertType(reason, String);
