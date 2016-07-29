@@ -76,9 +76,21 @@ promise.always onResolved
 
 Wait until this `Promise` is resolved, then call the given `Function`.
 
-The `onResolved` function is passed `(error, result, meta...)`, where `error` equals `null` when everything goes well.
+**NOTE:** The `onResolved` function is never passed any arguments!
 
-Unless this `Promise` is never resolved, `onResolved` will always be called!
+&nbsp;
+
+### Promise::notify
+
+```coffee
+promise.notify callback
+```
+
+Once `promise` is resolved, an `(error, result)` tuple is passed to the given `callback`.
+
+If the `callback` throws an error, the returned `Promise` is rejected with the error.
+
+Otherwise, the returned `Promise` will always mock its parent `Promise`.
 
 &nbsp;
 
@@ -220,6 +232,17 @@ Promise.isFulfilled value
 # Returns true when the given value is a rejected Promise.
 # If the given value is not a `Promise`, the returned value is `true`.
 Promise.isRejected value
+```
+
+&nbsp;
+
+### Unhandled rejections
+
+The `Promise` class allows multiple callbacks to listen for unhandled rejections.
+
+```coffee
+Promise.onUnhandledRejection (error, promise) ->
+  # TODO: Handle the rejected promise!
 ```
 
 &nbsp;
