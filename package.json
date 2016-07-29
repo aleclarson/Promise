@@ -6,7 +6,7 @@
     "PureObject": "aleclarson/PureObject#1.0.0",
     "Type": "aleclarson/Type#1.1.0",
     "assert": "aleclarson/assert#1.0.0",
-    "assertType": "aleclarson/assertType#1.0.0",
+    "assertType": "aleclarson/assertType#2.0.0",
     "bind": "aleclarson/bind#1.0.0",
     "emptyFunction": "aleclarson/emptyFunction#1.0.0",
     "has": "aleclarson/has#1.0.0",
