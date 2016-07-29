@@ -4,7 +4,7 @@
   "main": "js/Promise",
   "dependencies": {
     "PureObject": "aleclarson/PureObject#1.0.0",
-    "Type": "aleclarson/Type#1.0.0",
+    "Type": "aleclarson/Type#1.1.0",
     "assert": "aleclarson/assert#1.0.0",
     "assertType": "aleclarson/assertType#1.0.0",
     "bind": "aleclarson/bind#1.0.0",
