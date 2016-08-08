@@ -242,7 +242,7 @@ describe "Promise.try(func)", ->
 
       done()
 
-describe "Promise.all(array)", ->
+describe "Promise.all(array, iterator)", ->
 
   it "creates a new Promise that resolves once every item in `array` is resolved", (done) ->
 
@@ -251,14 +251,17 @@ describe "Promise.all(array)", ->
 
     Promise.all [ foo, bar.promise ]
 
-    .then (results) ->
+    .then ->
 
-      expect results
-        .toEqual [ 1, 2 ]
+      expect foo.isPending
+        .toBe no
+
+      expect bar.promise.isPending
+        .toBe no
 
       done()
 
-    bar.resolve 2
+    bar.resolve()
 
   it "rejects the new Promise if one of the items in `array` is rejected", (done) ->
 
@@ -277,11 +280,59 @@ describe "Promise.all(array)", ->
 
       done()
 
+  it "passes each (value, index) pair to the iterator, if one is defined", (done) ->
+
+    spy = jasmine.createSpy()
+    input = [ 1, 2 ]
+
+    Promise.all input, (value, index) -> spy [ value, index ]
+
+    .then ->
+
+      expect spy.calls.count()
+        .toBe 2
+
+      expect spy.calls.argsFor 0
+        .toEqual [[ 1, 0 ]]
+
+      expect spy.calls.argsFor 1
+        .toEqual [[ 2, 1 ]]
+
+      done()
+
   it "allows non-Promise values in `array`", (done) ->
+
+    foo = Promise.defer()
+
+    Promise.all [ 1, 2, foo.promise ]
+
+    .then ->
+
+      expect foo.promise.isPending
+        .toBe no
+
+      done()
+
+    foo.resolve()
+
+  it "does NOT create an array of resolved values", (done) ->
+
+    Promise.all [ 1, 2 ]
+
+    .then (result) ->
+
+      expect result
+        .toBe undefined
+
+      done()
+
+describe "Promise.map(iterable, iterator)", ->
+
+  it "creates an array of resolved values", (done) ->
 
     input = [ 1, 2 ]
 
-    Promise.all input
+    Promise.map input
 
     .then (output) ->
 
@@ -290,15 +341,12 @@ describe "Promise.all(array)", ->
 
       done()
 
-describe "Promise.map(array)", ->
-
-  it "iterates an Array, wrapping each value with a Promise", (done) ->
+  it "passes each (value, index) pair to the iterator, if one is defined", (done) ->
 
     input = [ 1, 2 ]
+    iterator = (value, index) -> value + index
 
-    Promise.map input, (value, index) ->
-      return value + index
-
+    Promise.map input, iterator
     .then (output) ->
 
       expect output
@@ -306,16 +354,11 @@ describe "Promise.map(array)", ->
 
       done()
 
-  it "can iterate an Object too", (done) ->
+  it "works with object literals too", (done) ->
 
     input = { a: 1, b: 2 }
 
-    Promise.map input, (value, key) ->
-
-      expect getType key
-        .toBe String
-
-      return value + 2
+    Promise.map input, (value, key) -> key + ":" + value
 
     .then (output) ->
 
@@ -323,10 +366,10 @@ describe "Promise.map(array)", ->
         .toBe Object
 
       expect output.a
-        .toBe 3
+        .toBe "a:1"
 
       expect output.b
-        .toBe 4
+        .toBe "b:2"
 
       done()
 

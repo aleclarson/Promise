@@ -379,40 +379,41 @@ type.defineStatics
 
         func.apply self, args
 
-  all: (array) ->
+  all: (array, iterator) ->
 
     assertType array, Array
+    assertType iterator, Function.Maybe
 
     { length } = array
-
-    if length is 0
-      return Promise []
+    return Promise() if length is 0
 
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "Promise.all()"
 
-    results = new Array length
-    remaining = length
-
     reject = bind.method promise, "_reject"
-    fulfill = (result, index) ->
+    fulfill = ->
       return if not promise.isPending
-      assertType index, Number
-      results[index] = result
       remaining -= 1
       if remaining is 0
-        promise._fulfill results
+        promise._fulfill()
       return
 
-    sync.repeat length, (index) ->
-      Promise array[index], index
-        .then fulfill, reject
+    remaining = length
+    if iterator
+      sync.repeat length, (index) ->
+        pending = Promise.try ->
+          iterator.call null, array[index], index
+        pending.then fulfill, reject
+    else
+      sync.repeat length, (index) ->
+        pending = Promise array[index]
+        pending.then fulfill, reject
 
     return promise
 
   map: (iterable, iterator) ->
 
-    assertType iterator, Function
+    assertType iterator, Function.Maybe
 
     promise = Promise PENDING
     isDev and promise._tracers.init = Tracer "Promise.map()"
@@ -440,12 +441,20 @@ type.defineStatics
       return
 
     remaining = 0
-    sync.each iterable, (value, key) ->
-      remaining += 1
-      item = Promise.try -> iterator.call null, value, key
-      item._results.push key
-      item.then fulfill, reject
-      return
+    if iterator
+      sync.each iterable, (value, key) ->
+        remaining += 1
+        pending = Promise.try ->
+          iterator.call null, value, key
+        pending._results.push key
+        pending.then fulfill, reject
+        return
+    else
+      sync.each iterable, (value, key) ->
+        remaining += 1
+        pending = Promise value, key
+        pending.then fulfill, reject
+        return
 
     return promise
 

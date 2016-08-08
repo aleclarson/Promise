@@ -424,37 +424,47 @@ type.defineStatics({
       });
     };
   },
-  all: function(array) {
-    var fulfill, length, promise, reject, remaining, results;
+  all: function(array, iterator) {
+    var fulfill, length, promise, reject, remaining;
     assertType(array, Array);
+    assertType(iterator, Function.Maybe);
     length = array.length;
     if (length === 0) {
-      return Promise([]);
+      return Promise();
     }
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("Promise.all()"));
-    results = new Array(length);
-    remaining = length;
     reject = bind.method(promise, "_reject");
-    fulfill = function(result, index) {
+    fulfill = function() {
       if (!promise.isPending) {
         return;
       }
-      assertType(index, Number);
-      results[index] = result;
       remaining -= 1;
       if (remaining === 0) {
-        promise._fulfill(results);
+        promise._fulfill();
       }
     };
-    sync.repeat(length, function(index) {
-      return Promise(array[index], index).then(fulfill, reject);
-    });
+    remaining = length;
+    if (iterator) {
+      sync.repeat(length, function(index) {
+        var pending;
+        pending = Promise["try"](function() {
+          return iterator.call(null, array[index], index);
+        });
+        return pending.then(fulfill, reject);
+      });
+    } else {
+      sync.repeat(length, function(index) {
+        var pending;
+        pending = Promise(array[index]);
+        return pending.then(fulfill, reject);
+      });
+    }
     return promise;
   },
   map: function(iterable, iterator) {
     var fulfill, promise, reject, remaining, results;
-    assertType(iterator, Function);
+    assertType(iterator, Function.Maybe);
     promise = Promise(PENDING);
     isDev && (promise._tracers.init = Tracer("Promise.map()"));
     if (Array.isArray(iterable)) {
@@ -480,15 +490,24 @@ type.defineStatics({
       }
     };
     remaining = 0;
-    sync.each(iterable, function(value, key) {
-      var item;
-      remaining += 1;
-      item = Promise["try"](function() {
-        return iterator.call(null, value, key);
+    if (iterator) {
+      sync.each(iterable, function(value, key) {
+        var pending;
+        remaining += 1;
+        pending = Promise["try"](function() {
+          return iterator.call(null, value, key);
+        });
+        pending._results.push(key);
+        pending.then(fulfill, reject);
       });
-      item._results.push(key);
-      item.then(fulfill, reject);
-    });
+    } else {
+      sync.each(iterable, function(value, key) {
+        var pending;
+        remaining += 1;
+        pending = Promise(value, key);
+        pending.then(fulfill, reject);
+      });
+    }
     return promise;
   },
   chain: function(iterable, iterator) {
