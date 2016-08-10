@@ -192,6 +192,49 @@ type.defineMethods({
     });
     return promise;
   },
+  timeout: function(delay, onTimeout) {
+    var callback, promise, timeout;
+    assertType(delay, Number);
+    assertType(onTimeout, Function);
+    promise = Promise(PENDING);
+    isDev && (promise._tracers.init = Tracer("promise.timeout()"));
+    if (!this.isPending) {
+      immediate(this, function() {
+        return promise._resolve(this);
+      });
+      return promise;
+    }
+    callback = function() {
+      var error, result, timeout;
+      timeout = null;
+      try {
+        result = onTimeout();
+      } catch (error1) {
+        error = error1;
+        promise._reject(error);
+        return;
+      }
+      promise._fulfill(result);
+    };
+    timeout = setTimeout(callback, delay);
+    this._queue.push({
+      fulfill: function(result) {
+        if (timeout === null) {
+          return;
+        }
+        clearTimeout(timeout);
+        return promise._fulfill(result);
+      },
+      reject: function(error) {
+        if (timeout === null) {
+          return;
+        }
+        clearTimeout(timeout);
+        return promise._reject(error);
+      }
+    });
+    return promise;
+  },
   _inherit: function(results, offset) {
     var index, length;
     assertType(results, [Array, Object]);

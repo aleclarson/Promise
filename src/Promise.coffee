@@ -170,6 +170,44 @@ type.defineMethods
 
     return promise
 
+  timeout: (delay, onTimeout) ->
+
+    assertType delay, Number
+    assertType onTimeout, Function
+
+    promise = Promise PENDING
+    isDev and promise._tracers.init = Tracer "promise.timeout()"
+
+    if not @isPending
+      immediate this, ->
+        promise._resolve this
+      return promise
+
+    callback = ->
+      timeout = null
+      try result = onTimeout()
+      catch error
+        promise._reject error
+        return
+      promise._fulfill result
+      return
+
+    timeout = setTimeout callback, delay
+
+    @_queue.push
+
+      fulfill: (result) ->
+        return if timeout is null
+        clearTimeout timeout
+        promise._fulfill result
+
+      reject: (error) ->
+        return if timeout is null
+        clearTimeout timeout
+        promise._reject error
+
+    return promise
+
   _inherit: (results, offset) ->
 
     assertType results, [ Array, Object ]
