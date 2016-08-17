@@ -210,7 +210,7 @@ type.defineMethods
 
   _inherit: (results, offset) ->
 
-    assertType results, [ Array, Object ]
+    assertType results, Array.or Object
 
     { length } = results
     return if offset >= length

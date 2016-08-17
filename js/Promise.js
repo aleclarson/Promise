@@ -237,7 +237,7 @@ type.defineMethods({
   },
   _inherit: function(results, offset) {
     var index, length;
-    assertType(results, [Array, Object]);
+    assertType(results, Array.or(Object));
     length = results.length;
     if (offset >= length) {
       return;
