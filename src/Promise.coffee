@@ -1,6 +1,4 @@
 
-require "isDev"
-
 emptyFunction = require "emptyFunction"
 PureObject = require "PureObject"
 assertType = require "assertType"
@@ -20,17 +18,17 @@ REJECTED = Symbol "Promise.REJECTED"
 
 type = Type "Promise"
 
-type.defineValues
+type.trace()
+
+type.defineValues ->
 
   _state: PENDING
 
   _unhandled: yes
 
-  _results: -> [ undefined ]
+  _results: [undefined]
 
-  _queue: -> []
-
-  _tracers: isDev and -> {}
+  _queue: []
 
 type.initInstance (result) ->
   @_inherit arguments, 1
@@ -54,9 +52,6 @@ type.definePrototype
 
 type.defineMethods
 
-  trace: ->
-    @_tracers.init and @_tracers.init()[1].stack
-
   inspect: ->
 
     promise = { @state }
@@ -78,8 +73,6 @@ type.defineMethods
     assertType onRejected, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.then()"
-
     @_then promise, onFulfilled, onRejected
     return promise
 
@@ -88,8 +81,6 @@ type.defineMethods
     assertType onRejected, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.fail()"
-
     @_then promise, undefined, onRejected
     return promise
 
@@ -98,8 +89,6 @@ type.defineMethods
     assertType onResolved, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.always()"
-
     @_always (parent) ->
 
       try value = onResolved()
@@ -134,8 +123,6 @@ type.defineMethods
     assertType callback, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.notify()"
-
     @_always (parent) ->
 
       promise._inherit parent._results, 1
@@ -158,11 +145,9 @@ type.defineMethods
 
     assertType reason, String
     assertType predicate, Function.Maybe
+    predicate ?= emptyFunction.thatReturnsArgument
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.assert()"
-
-    predicate ?= emptyFunction.thatReturnsArgument
     @_then promise, (result) ->
       if not predicate result
         throw Error reason
@@ -176,7 +161,6 @@ type.defineMethods
     assertType onTimeout, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.timeout()"
 
     if not @isPending
       immediate this, ->
@@ -367,7 +351,6 @@ type.defineStatics
     assertType resolver, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.defer()"
 
     if resolver
       return promise._defer resolver
@@ -381,14 +364,12 @@ type.defineStatics
   reject: (error) ->
     assertType error, Error.Kind
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.reject()"
     promise._reject error
     return promise
 
   try: (func) ->
     assertType func, Function
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.try()"
     promise._tryResolving func
     return promise
 
@@ -396,7 +377,6 @@ type.defineStatics
     assertType func, Function
     return ->
       promise = Promise PENDING
-      isDev and promise._tracers.init = Tracer "Promise.wrap()"
       promise._tryResolving bind.func func, this, arguments
       return promise
 
@@ -407,8 +387,6 @@ type.defineStatics
       args = arguments
 
       promise = Promise PENDING
-      isDev and promise._tracers.init = Tracer "Promise.ify()"
-
       return promise._defer (resolve, reject) ->
 
         Array::push.call args, (error, result) ->
@@ -426,8 +404,6 @@ type.defineStatics
     return Promise() if length is 0
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.all()"
-
     reject = bind.method promise, "_reject"
     fulfill = ->
       return if not promise.isPending
@@ -454,7 +430,6 @@ type.defineStatics
     assertType iterator, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.map()"
 
     if Array.isArray iterable
       results = new Array iterable.length
