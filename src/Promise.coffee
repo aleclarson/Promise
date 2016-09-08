@@ -97,6 +97,9 @@ type.defineMethods
     @_then promise, undefined, onRejected
     return promise
 
+  finally: (onResolved) ->
+    return @always onResolved
+
   always: (onResolved) ->
 
     assertType onResolved, Function
