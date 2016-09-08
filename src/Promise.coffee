@@ -399,6 +399,9 @@ type.defineStatics
       promise._tryResolving bind.func func, this, arguments
       return promise
 
+  denodeify: (func) ->
+    return @ify func
+
   ify: (func) ->
     assertType func, Function
     return ->
