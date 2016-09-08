@@ -86,6 +86,9 @@ type.defineMethods
     @_then promise, onFulfilled, onRejected
     return promise
 
+  catch: (onRejected) ->
+    return @fail onRejected
+
   fail: (onRejected) ->
 
     assertType onRejected, Function.Maybe
