@@ -417,37 +417,7 @@ type.defineStatics
 
         func.apply self, args
 
-  all: (array, iterator) ->
-
-    assertType array, Array
-    assertType iterator, Function.Maybe
-
-    { length } = array
-    return Promise() if length is 0
-
-    promise = Promise PENDING
-    reject = bind.method promise, "_reject"
-    fulfill = ->
-      return if not promise.isPending
-      remaining -= 1
-      if remaining is 0
-        promise._fulfill()
-      return
-
-    remaining = length
-    if iterator
-      sync.repeat length, (index) ->
-        pending = Promise.try ->
-          iterator.call null, array[index], index
-        pending.then fulfill, reject
-    else
-      sync.repeat length, (index) ->
-        pending = Promise array[index]
-        pending.then fulfill, reject
-
-    return promise
-
-  map: (iterable, iterator) ->
+  all: (iterable, iterator) ->
 
     assertType iterator, Function.Maybe
 
@@ -492,6 +462,10 @@ type.defineStatics
         return
 
     return promise
+
+  map: (iterable, iterator) ->
+    console.warn "Promise.map() is deprecated! Use Promise.all() instead!"
+    @all iterable, iterator
 
   chain: (iterable, iterator) ->
     assertType iterator, Function
