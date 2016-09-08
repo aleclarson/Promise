@@ -318,6 +318,7 @@ type.defineMethods
 
     @_always (parent) ->
       promise._resolve parent, onFulfilled, onRejected
+    return
 
   _always: (onResolved) ->
 
@@ -332,6 +333,7 @@ type.defineMethods
     @_queue.push
       fulfill: onResolved
       reject: onResolved
+    return
 
   _defer: (resolver) ->
 
