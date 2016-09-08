@@ -377,6 +377,9 @@ type.defineStatics
       reject: bind.method promise, "_reject"
     }
 
+  resolve: (value) ->
+    return Promise value
+
   reject: (error) ->
     assertType error, Error.Kind
     promise = Promise PENDING
