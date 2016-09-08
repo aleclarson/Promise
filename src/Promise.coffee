@@ -474,6 +474,15 @@ type.defineStatics
     return sync.reduce iterable, Promise(), (chain, value, key) ->
       chain.then -> iterator.call null, value, key
 
+  race: (array) ->
+    assertType array, Array
+    deferred = Promise.defer()
+    for promise in array
+      promise and
+      promise.then and
+      promise.then deferred.resolve, deferred.reject
+    return deferred.promise
+
   onUnhandledRejection: (fallback) ->
     @_rejectFallbacks.push fallback
     return
