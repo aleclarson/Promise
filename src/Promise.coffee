@@ -15,10 +15,16 @@ has = require "has"
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
 REJECTED = Symbol "Promise.REJECTED"
+DEFERRED = Symbol "Promise.DEFERRED"
 
 type = Type "Promise"
 
 type.trace()
+
+type.replaceArgs (args) ->
+  if this isnt global
+    return [DEFERRED, args[0]]
+  return args
 
 type.defineValues ->
 
@@ -31,8 +37,12 @@ type.defineValues ->
   _queue: []
 
 type.initInstance (result) ->
-  @_inherit arguments, 1
-  @_tryFulfilling result if result isnt PENDING
+  if result is DEFERRED
+    @_defer arguments[1]
+  else if result isnt PENDING
+    @_inherit arguments, 1
+    @_tryFulfilling result
+  return
 
 type.definePrototype
 
