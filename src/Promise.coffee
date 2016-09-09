@@ -131,6 +131,17 @@ type.defineMethods
 
     return promise
 
+  done: (onFulfilled, onRejected) ->
+
+    promise =
+      if arguments.length
+      then @then onFulfilled, onRejected
+      else this
+
+    promise.fail (error) ->
+      immediate -> throw error
+    return
+
   notify: (callback) ->
 
     if not callback
