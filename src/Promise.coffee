@@ -43,20 +43,20 @@ type.initInstance (result) ->
     @_tryFulfilling result
   return
 
-type.definePrototype
+type.defineGetters
 
-  state: get: ->
+  state: ->
     if @isFulfilled then "fulfilled"
     else if @isRejected then "rejected"
     else "pending"
 
-  isPending: get: ->
+  isPending: ->
     @_state is PENDING
 
-  isFulfilled: get: ->
+  isFulfilled: ->
     @_state is FULFILLED
 
-  isRejected: get: ->
+  isRejected: ->
     @_state is REJECTED
 
 type.defineMethods
