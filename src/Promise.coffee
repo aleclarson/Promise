@@ -6,7 +6,6 @@ immediate = require "immediate"
 hasKeys = require "hasKeys"
 Tracer = require "tracer"
 isType = require "isType"
-assert = require "assert"
 Type = require "Type"
 sync = require "sync"
 bind = require "bind"
@@ -236,7 +235,8 @@ type.defineMethods
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
 
-    assert not parent.isPending, "The parent Promise must be resolved!"
+    if parent.isPending
+      throw Error "The parent Promise must be resolved!"
 
     return if not @isPending
 
@@ -251,7 +251,8 @@ type.defineMethods
 
   _fulfill: (value) ->
 
-    assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
+    if isType value, Promise
+      throw Error "Cannot fulfill with a Promise as the result!"
 
     return if not @isPending
 
@@ -318,7 +319,8 @@ type.defineMethods
     immediate this, ->
       try value = resolver.apply null, args
       catch error then return @_reject error
-      assert value isnt this, "Cannot resolve a Promise with itself!"
+      if value is this
+        throw Error "Cannot resolve a Promise with itself!"
       @_tryFulfilling value
 
   _then: (promise, onFulfilled, onRejected) ->
