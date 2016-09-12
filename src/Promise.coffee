@@ -1,6 +1,4 @@
 
-require "isDev"
-
 emptyFunction = require "emptyFunction"
 PureObject = require "PureObject"
 assertType = require "assertType"
@@ -8,7 +6,6 @@ immediate = require "immediate"
 hasKeys = require "hasKeys"
 Tracer = require "tracer"
 isType = require "isType"
-assert = require "assert"
 Type = require "Type"
 sync = require "sync"
 bind = require "bind"
@@ -17,45 +14,52 @@ has = require "has"
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
 REJECTED = Symbol "Promise.REJECTED"
+DEFERRED = Symbol "Promise.DEFERRED"
 
 type = Type "Promise"
 
-type.defineValues
+type.trace()
+
+type.replaceArgs (args) ->
+  if this isnt global
+    return [DEFERRED, args[0]]
+  return args
+
+type.defineValues ->
 
   _state: PENDING
 
   _unhandled: yes
 
-  _results: -> [ undefined ]
+  _results: [undefined]
 
-  _queue: -> []
-
-  _tracers: isDev and -> {}
+  _queue: []
 
 type.initInstance (result) ->
-  @_inherit arguments, 1
-  @_tryFulfilling result if result isnt PENDING
+  if result is DEFERRED
+    @_defer arguments[1]
+  else if result isnt PENDING
+    @_inherit arguments, 1
+    @_tryFulfilling result
+  return
 
-type.definePrototype
+type.defineGetters
 
-  state: get: ->
+  state: ->
     if @isFulfilled then "fulfilled"
     else if @isRejected then "rejected"
     else "pending"
 
-  isPending: get: ->
+  isPending: ->
     @_state is PENDING
 
-  isFulfilled: get: ->
+  isFulfilled: ->
     @_state is FULFILLED
 
-  isRejected: get: ->
+  isRejected: ->
     @_state is REJECTED
 
 type.defineMethods
-
-  trace: ->
-    @_tracers.init and @_tracers.init()[1].stack
 
   inspect: ->
 
@@ -78,28 +82,28 @@ type.defineMethods
     assertType onRejected, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.then()"
-
     @_then promise, onFulfilled, onRejected
     return promise
+
+  catch: (onRejected) ->
+    return @fail onRejected
 
   fail: (onRejected) ->
 
     assertType onRejected, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.fail()"
-
     @_then promise, undefined, onRejected
     return promise
+
+  finally: (onResolved) ->
+    return @always onResolved
 
   always: (onResolved) ->
 
     assertType onResolved, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.always()"
-
     @_always (parent) ->
 
       try value = onResolved()
@@ -126,6 +130,17 @@ type.defineMethods
 
     return promise
 
+  done: (onFulfilled, onRejected) ->
+
+    promise =
+      if arguments.length
+      then @then onFulfilled, onRejected
+      else this
+
+    promise.fail (error) ->
+      immediate -> throw error
+    return
+
   notify: (callback) ->
 
     if not callback
@@ -134,8 +149,6 @@ type.defineMethods
     assertType callback, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.notify()"
-
     @_always (parent) ->
 
       promise._inherit parent._results, 1
@@ -158,11 +171,9 @@ type.defineMethods
 
     assertType reason, String
     assertType predicate, Function.Maybe
+    predicate ?= emptyFunction.thatReturnsArgument
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.assert()"
-
-    predicate ?= emptyFunction.thatReturnsArgument
     @_then promise, (result) ->
       if not predicate result
         throw Error reason
@@ -170,47 +181,42 @@ type.defineMethods
 
     return promise
 
-  timeout: (delay, onTimeout) ->
+  timeout: (delay, callback) ->
 
     assertType delay, Number
-    assertType onTimeout, Function
+    assertType callback, Function
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "promise.timeout()"
 
     if not @isPending
       immediate this, ->
+        promise._inherit @_results, 1
         promise._resolve this
       return promise
 
-    callback = ->
+    onTimeout = ->
       timeout = null
-      try result = onTimeout()
+      try result = callback()
       catch error
         promise._reject error
         return
       promise._fulfill result
       return
 
-    timeout = setTimeout callback, delay
+    timeout = setTimeout onTimeout, delay
 
-    @_queue.push
-
-      fulfill: (result) ->
-        return if timeout is null
+    @_queue.push (parent) ->
+      if timeout isnt null
         clearTimeout timeout
-        promise._fulfill result
-
-      reject: (error) ->
-        return if timeout is null
-        clearTimeout timeout
-        promise._reject error
+        promise._inherit parent._results, 1
+        promise._resolve parent
+      return
 
     return promise
 
   _inherit: (results, offset) ->
 
-    assertType results, [ Array, Object ]
+    assertType results, Array.or Object
 
     { length } = results
     return if offset >= length
@@ -225,7 +231,8 @@ type.defineMethods
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
 
-    assert not parent.isPending, "The parent Promise must be resolved!"
+    if parent.isPending
+      throw Error "The parent Promise must be resolved!"
 
     return if not @isPending
 
@@ -240,7 +247,8 @@ type.defineMethods
 
   _fulfill: (value) ->
 
-    assert not isType(value, Promise), "Cannot fulfill with a Promise as the result!"
+    if isType value, Promise
+      throw Error "Cannot fulfill with a Promise as the result!"
 
     return if not @isPending
 
@@ -254,7 +262,7 @@ type.defineMethods
     immediate this, ->
       index = -1
       while ++index < length
-        queue[index].fulfill this
+        queue[index] this
       return
 
   _reject: (error) ->
@@ -282,7 +290,7 @@ type.defineMethods
       # for sure that the queue is not empty.
       {length} = queue
       while ++index < length
-        queue[index].reject this
+        queue[index] this
       return
 
   _tryFulfilling: (value) ->
@@ -307,7 +315,8 @@ type.defineMethods
     immediate this, ->
       try value = resolver.apply null, args
       catch error then return @_reject error
-      assert value isnt this, "Cannot resolve a Promise with itself!"
+      if value is this
+        throw Error "Cannot resolve a Promise with itself!"
       @_tryFulfilling value
 
   _then: (promise, onFulfilled, onRejected) ->
@@ -318,6 +327,7 @@ type.defineMethods
 
     @_always (parent) ->
       promise._resolve parent, onFulfilled, onRejected
+    return
 
   _always: (onResolved) ->
 
@@ -329,9 +339,8 @@ type.defineMethods
       return immediate this, ->
         onResolved this
 
-    @_queue.push
-      fulfill: onResolved
-      reject: onResolved
+    @_queue.push onResolved
+    return
 
   _defer: (resolver) ->
 
@@ -367,7 +376,6 @@ type.defineStatics
     assertType resolver, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.defer()"
 
     if resolver
       return promise._defer resolver
@@ -378,17 +386,18 @@ type.defineStatics
       reject: bind.method promise, "_reject"
     }
 
+  resolve: (value) ->
+    return Promise value
+
   reject: (error) ->
     assertType error, Error.Kind
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.reject()"
     promise._reject error
     return promise
 
   try: (func) ->
     assertType func, Function
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.try()"
     promise._tryResolving func
     return promise
 
@@ -396,9 +405,11 @@ type.defineStatics
     assertType func, Function
     return ->
       promise = Promise PENDING
-      isDev and promise._tracers.init = Tracer "Promise.wrap()"
       promise._tryResolving bind.func func, this, arguments
       return promise
+
+  denodeify: (func) ->
+    return @ify func
 
   ify: (func) ->
     assertType func, Function
@@ -407,8 +418,6 @@ type.defineStatics
       args = arguments
 
       promise = Promise PENDING
-      isDev and promise._tracers.init = Tracer "Promise.ify()"
-
       return promise._defer (resolve, reject) ->
 
         Array::push.call args, (error, result) ->
@@ -417,44 +426,11 @@ type.defineStatics
 
         func.apply self, args
 
-  all: (array, iterator) ->
-
-    assertType array, Array
-    assertType iterator, Function.Maybe
-
-    { length } = array
-    return Promise() if length is 0
-
-    promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.all()"
-
-    reject = bind.method promise, "_reject"
-    fulfill = ->
-      return if not promise.isPending
-      remaining -= 1
-      if remaining is 0
-        promise._fulfill()
-      return
-
-    remaining = length
-    if iterator
-      sync.repeat length, (index) ->
-        pending = Promise.try ->
-          iterator.call null, array[index], index
-        pending.then fulfill, reject
-    else
-      sync.repeat length, (index) ->
-        pending = Promise array[index]
-        pending.then fulfill, reject
-
-    return promise
-
-  map: (iterable, iterator) ->
+  all: (iterable, iterator) ->
 
     assertType iterator, Function.Maybe
 
     promise = Promise PENDING
-    isDev and promise._tracers.init = Tracer "Promise.map()"
 
     if Array.isArray iterable
       results = new Array iterable.length
@@ -496,10 +472,23 @@ type.defineStatics
 
     return promise
 
+  map: (iterable, iterator) ->
+    console.warn "Promise.map() is deprecated! Use Promise.all() instead!"
+    @all iterable, iterator
+
   chain: (iterable, iterator) ->
     assertType iterator, Function
     return sync.reduce iterable, Promise(), (chain, value, key) ->
       chain.then -> iterator.call null, value, key
+
+  race: (array) ->
+    assertType array, Array
+    deferred = Promise.defer()
+    for promise in array
+      promise and
+      promise.then and
+      promise.then deferred.resolve, deferred.reject
+    return deferred.promise
 
   onUnhandledRejection: (fallback) ->
     @_rejectFallbacks.push fallback
