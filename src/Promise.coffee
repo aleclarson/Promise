@@ -181,40 +181,36 @@ type.defineMethods
 
     return promise
 
-  timeout: (delay, onTimeout) ->
+  timeout: (delay, callback) ->
 
     assertType delay, Number
-    assertType onTimeout, Function
+    assertType callback, Function
 
     promise = Promise PENDING
 
     if not @isPending
       immediate this, ->
+        promise._inherit @_results, 1
         promise._resolve this
       return promise
 
-    callback = ->
+    onTimeout = ->
       timeout = null
-      try result = onTimeout()
+      try result = callback()
       catch error
         promise._reject error
         return
       promise._fulfill result
       return
 
-    timeout = setTimeout callback, delay
+    timeout = setTimeout onTimeout, delay
 
-    @_queue.push
-
-      fulfill: (result) ->
-        return if timeout is null
+    @_queue.push (parent) ->
+      if timeout isnt null
         clearTimeout timeout
-        promise._fulfill result
-
-      reject: (error) ->
-        return if timeout is null
-        clearTimeout timeout
-        promise._reject error
+        promise._inherit parent._results, 1
+        promise._resolve parent
+      return
 
     return promise
 
@@ -266,7 +262,7 @@ type.defineMethods
     immediate this, ->
       index = -1
       while ++index < length
-        queue[index].fulfill this
+        queue[index] this
       return
 
   _reject: (error) ->
@@ -294,7 +290,7 @@ type.defineMethods
       # for sure that the queue is not empty.
       {length} = queue
       while ++index < length
-        queue[index].reject this
+        queue[index] this
       return
 
   _tryFulfilling: (value) ->
@@ -343,9 +339,7 @@ type.defineMethods
       return immediate this, ->
         onResolved this
 
-    @_queue.push
-      fulfill: onResolved
-      reject: onResolved
+    @_queue.push onResolved
     return
 
   _defer: (resolver) ->
