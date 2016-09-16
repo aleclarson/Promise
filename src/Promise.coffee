@@ -430,14 +430,12 @@ type.defineStatics
 
     promise = Promise PENDING
 
-    if Array.isArray iterable
-      results = new Array iterable.length
-
-    else if PureObject.test iterable
-      results = Object.create null
-
-    else
-      results = {}
+    results =
+      if Array.isArray iterable
+      then new Array iterable.length
+      else if PureObject.test iterable
+      then Object.create null
+      else {}
 
     if not hasKeys iterable
       promise._fulfill results
