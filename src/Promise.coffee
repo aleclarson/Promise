@@ -452,20 +452,16 @@ type.defineStatics
       return
 
     remaining = 0
-    if iterator
-      sync.each iterable, (value, key) ->
-        remaining += 1
-        pending = Promise.try ->
-          iterator.call null, value, key
-        pending._results.push key
+    sync.each iterable, (value, key) ->
+      remaining += 1
+      if iterator
+        pending = Promise PENDING, key
         pending.then fulfill, reject
-        return
-    else
-      sync.each iterable, (value, key) ->
-        remaining += 1
+        pending._tryResolving iterator, [value, key]
+      else
         pending = Promise value, key
         pending.then fulfill, reject
-        return
+      return
 
     return promise
 
