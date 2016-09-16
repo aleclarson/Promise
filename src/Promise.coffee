@@ -36,10 +36,14 @@ type.defineValues ->
   _queue: []
 
 type.initInstance (result) ->
+
+  # Supports `new Promise(resolver)`
   if result is DEFERRED
     @_defer arguments[1]
-  else if result isnt PENDING
-    @_inherit arguments, 1
+    return
+
+  @_inherit arguments, 1
+  if result isnt PENDING
     @_tryFulfilling result
   return
 
