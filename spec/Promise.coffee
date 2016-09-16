@@ -347,6 +347,18 @@ describe "Promise.all(array, iterator)", ->
 
       done()
 
+  it "always returns a pending Promise", ->
+
+    # Test with 0 promises.
+    p1 = Promise.all []
+    expect p1.isPending
+      .toBe yes
+
+    # Test with 1 promise.
+    p2 = Promise.all [p1]
+    expect p2.isPending
+      .toBe yes
+
 describe "Promise.chain(array)", ->
 
   it "only resolves one item in `array` at a time", (done) ->

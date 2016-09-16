@@ -438,7 +438,8 @@ type.defineStatics
       else {}
 
     if not hasKeys iterable
-      promise._fulfill results
+      immediate ->
+        promise._fulfill results
       return promise
 
     reject = bind.method promise, "_reject"
