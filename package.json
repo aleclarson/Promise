@@ -6,8 +6,8 @@
     "lotus-coffee"
   ],
   "scripts": {
-    "build": "coffee -cb -o js src",
-    "postinstall": "postinstall-build js 'npm run build'"
+    "build": "coffee-build -v 1.11.x -b -o js src",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "PureObject": "aleclarson/PureObject#1.0.0",
@@ -19,12 +19,10 @@
     "hasKeys": "aleclarson/hasKeys#1.0.0",
     "immediate": "aleclarson/immediate#4.1.0",
     "isType": "aleclarson/isType#1.0.0",
-    "postinstall-build": "0.2.x",
     "sync": "aleclarson/sync#1.0.0",
     "tracer": "aleclarson/tracer#1.0.0"
   },
   "devDependencies": {
-    "getType": "aleclarson/getType#1.0.0",
-    "coffee-script": "1.9.x"
+    "getType": "aleclarson/getType#1.0.0"
   }
 }
