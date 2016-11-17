@@ -1,11 +1,9 @@
 
-# Promise 2.0.0 ![experimental](https://img.shields.io/badge/stability-experimental-EC5315.svg?style=flat)
+# Promise v2.1.0 ![experimental](https://img.shields.io/badge/stability-experimental-EC5315.svg?style=flat)
 
 A `Promise` implementation written in CoffeeScript and derived from [calvinmetcalf/lie](https://github.com/calvinmetcalf/lie).
 
 **NOTE:** This is not entirely spec-compliant.
-
-**TODO:** Update docs & tests for v2.0.0!
 
 ```coffee
 # Fulfill a new Promise with the given value.
