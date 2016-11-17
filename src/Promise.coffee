@@ -36,10 +36,14 @@ type.defineValues ->
   _queue: []
 
 type.initInstance (result) ->
+
+  # Supports `new Promise(resolver)`
   if result is DEFERRED
     @_defer arguments[1]
-  else if result isnt PENDING
-    @_inherit arguments, 1
+    return
+
+  @_inherit arguments, 1
+  if result isnt PENDING
     @_tryFulfilling result
   return
 
@@ -131,14 +135,8 @@ type.defineMethods
     return promise
 
   done: (onFulfilled, onRejected) ->
-
-    promise =
-      if arguments.length
-      then @then onFulfilled, onRejected
-      else this
-
-    promise.fail (error) ->
-      immediate -> throw error
+    if arguments.length
+      @then onFulfilled, onRejected
     return
 
   notify: (callback) ->
@@ -432,17 +430,16 @@ type.defineStatics
 
     promise = Promise PENDING
 
-    if Array.isArray iterable
-      results = new Array iterable.length
-
-    else if PureObject.test iterable
-      results = Object.create null
-
-    else
-      results = {}
+    results =
+      if Array.isArray iterable
+      then new Array iterable.length
+      else if PureObject.test iterable
+      then Object.create null
+      else {}
 
     if not hasKeys iterable
-      promise._fulfill results
+      immediate ->
+        promise._fulfill results
       return promise
 
     reject = bind.method promise, "_reject"
@@ -455,20 +452,16 @@ type.defineStatics
       return
 
     remaining = 0
-    if iterator
-      sync.each iterable, (value, key) ->
-        remaining += 1
-        pending = Promise.try ->
-          iterator.call null, value, key
-        pending._results.push key
+    sync.each iterable, (value, key) ->
+      remaining += 1
+      if iterator
+        pending = Promise PENDING, key
         pending.then fulfill, reject
-        return
-    else
-      sync.each iterable, (value, key) ->
-        remaining += 1
+        pending._tryResolving iterator, [value, key]
+      else
         pending = Promise value, key
         pending.then fulfill, reject
-        return
+      return
 
     return promise
 

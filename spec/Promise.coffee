@@ -315,24 +315,11 @@ describe "Promise.all(array, iterator)", ->
 
     foo.resolve()
 
-  it "does NOT create an array of resolved values", (done) ->
-
-    Promise.all [ 1, 2 ]
-
-    .then (result) ->
-
-      expect result
-        .toBe undefined
-
-      done()
-
-describe "Promise.map(iterable, iterator)", ->
-
   it "creates an array of resolved values", (done) ->
 
     input = [ 1, 2 ]
 
-    Promise.map input
+    Promise.all input
 
     .then (output) ->
 
@@ -341,24 +328,11 @@ describe "Promise.map(iterable, iterator)", ->
 
       done()
 
-  it "passes each (value, index) pair to the iterator, if one is defined", (done) ->
-
-    input = [ 1, 2 ]
-    iterator = (value, index) -> value + index
-
-    Promise.map input, iterator
-    .then (output) ->
-
-      expect output
-        .toEqual [ 1, 3 ]
-
-      done()
-
   it "works with object literals too", (done) ->
 
     input = { a: 1, b: 2 }
 
-    Promise.map input, (value, key) -> key + ":" + value
+    Promise.all input, (value, key) -> key + ":" + value
 
     .then (output) ->
 
@@ -372,6 +346,18 @@ describe "Promise.map(iterable, iterator)", ->
         .toBe "b:2"
 
       done()
+
+  it "always returns a pending Promise", ->
+
+    # Test with 0 promises.
+    p1 = Promise.all []
+    expect p1.isPending
+      .toBe yes
+
+    # Test with 1 promise.
+    p2 = Promise.all [p1]
+    expect p2.isPending
+      .toBe yes
 
 describe "Promise.chain(array)", ->
 
