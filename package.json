@@ -1,0 +1,18 @@
+{
+  "name": "Promise",
+  "version": "2.1.0",
+  "main": "js/Promise",
+  "dependencies": {
+    "PureObject": "aleclarson/PureObject#1.0.1",
+    "Type": "aleclarson/Type#2.1.0",
+    "assertType": "aleclarson/assertType#2.0.1",
+    "bind": "aleclarson/bind#1.0.1",
+    "emptyFunction": "aleclarson/emptyFunction#1.0.0",
+    "has": "aleclarson/has#1.0.0",
+    "hasKeys": "aleclarson/hasKeys#1.0.0",
+    "immediate": "aleclarson/immediate#4.1.1",
+    "isType": "aleclarson/isType#1.0.1",
+    "sync": "aleclarson/sync#1.0.1",
+    "tracer": "aleclarson/tracer#1.0.0"
+  }
+}
