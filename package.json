@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "PureObject": "aleclarson/PureObject#1.0.1",
-    "Type": "aleclarson/Type#2.1.0",
+    "Type": "aleclarson/Type#2.2.0",
     "assertType": "aleclarson/assertType#2.0.1",
     "bind": "aleclarson/bind#1.0.1",
     "emptyFunction": "aleclarson/emptyFunction#1.0.0",
