@@ -377,12 +377,14 @@ type.defineStatics
 
   resolve: (value) ->
     promise = Promise PENDING
+    promise._inherit arguments, 1
     promise._tryFulfilling value
     return promise
 
   reject: (error) ->
     assertType error, Error.Kind
     promise = Promise PENDING
+    promise._inherit arguments, 1
     promise._reject error
     return promise
 
