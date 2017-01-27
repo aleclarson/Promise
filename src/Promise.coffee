@@ -14,16 +14,10 @@ has = require "has"
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
 REJECTED = Symbol "Promise.REJECTED"
-DEFERRED = Symbol "Promise.DEFERRED"
 
 type = Type "Promise"
 
 type.trace()
-
-type.replaceArgs (args) ->
-  if this isnt global
-    return [DEFERRED, args[0]]
-  return args
 
 type.defineValues ->
 
@@ -37,14 +31,11 @@ type.defineValues ->
 
 type.initInstance (result) ->
 
-  # Supports `new Promise(resolver)`
-  if result is DEFERRED
-    @_defer arguments[1]
+  if result is PENDING
+    @_inherit arguments, 1
     return
 
-  @_inherit arguments, 1
-  if result isnt PENDING
-    @_tryFulfilling result
+  @_defer result
   return
 
 type.defineGetters
@@ -385,7 +376,9 @@ type.defineStatics
     }
 
   resolve: (value) ->
-    return Promise value
+    promise = Promise PENDING
+    promise._tryFulfilling value
+    return promise
 
   reject: (error) ->
     assertType error, Error.Kind
@@ -459,7 +452,7 @@ type.defineStatics
         pending.then fulfill, reject
         pending._tryResolving iterator, [value, key]
       else
-        pending = Promise value, key
+        pending = Promise.resolve value, key
         pending.then fulfill, reject
       return
 
@@ -471,7 +464,7 @@ type.defineStatics
 
   chain: (iterable, iterator) ->
     assertType iterator, Function
-    return sync.reduce iterable, Promise(), (chain, value, key) ->
+    return sync.reduce iterable, Promise.resolve(), (chain, value, key) ->
       chain.then -> iterator.call null, value, key
 
   race: (array) ->
