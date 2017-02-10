@@ -6,18 +6,21 @@ immediate = require "immediate"
 hasKeys = require "hasKeys"
 Tracer = require "tracer"
 isType = require "isType"
+isDev = require "isDev"
 Type = require "Type"
 sync = require "sync"
 bind = require "bind"
 has = require "has"
+
+if isDev
+  PromiseTracer = require "./PromiseTracer"
+  StubTracer = {trace: emptyFunction}
 
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
 REJECTED = Symbol "Promise.REJECTED"
 
 type = Type "Promise"
-
-type.trace()
 
 type.defineGetters
 
@@ -52,6 +55,10 @@ type.defineMethods
 
     return promise
 
+  trace: ->
+    PromiseTracer().trace this
+    return this
+
   then: (onFulfilled, onRejected) ->
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
@@ -76,6 +83,7 @@ type.defineMethods
     assertType onResolved, Function
 
     promise = Promise PENDING
+    @_tracer.trace promise, this
     @_always (parent) ->
 
       try value = onResolved()
@@ -115,6 +123,7 @@ type.defineMethods
     assertType callback, Function
 
     promise = Promise PENDING
+    @_tracer.trace promise, this
     @_always (parent) ->
 
       promise._inherit parent._results, 1
@@ -153,6 +162,7 @@ type.defineMethods
     assertType callback, Function
 
     promise = Promise PENDING
+    @_tracer.trace promise, this
 
     if not @isPending
       immediate this, ->
@@ -288,16 +298,19 @@ type.defineStatics
       return
 
     remaining = 0
-    sync.each iterable, (value, key) ->
-      remaining += 1
-      pending =
+    immediate -> # Allow time for 'trace' to be called.
+      tracer = promise._tracer
+      sync.each iterable, (value, key) ->
+        remaining += 1
+        pending =
+          if iterator
+          then Promise PENDING, key
+          else Promise.resolve value, key
+        tracer.trace pending, promise
+        pending.then fulfill, reject
         if iterator
-        then Promise PENDING, key
-        else Promise.resolve value, key
-      pending.then fulfill, reject
-      if iterator
-        pending._tryResolving iterator, [value, key]
-      return
+          pending._tryResolving iterator, [value, key]
+        return
 
     return promise
 
@@ -335,6 +348,8 @@ type.defineValues ->
   _results: [undefined]
 
   _queue: []
+
+  _tracer: StubTracer if isDev
 
 type.initInstance (result) ->
 
@@ -387,6 +402,7 @@ type.defineMethods
 
     @_state = FULFILLED
     @_results[0] = value
+    @_tracer.trace this
 
     {length} = queue = @_queue
     @_queue = null
@@ -406,6 +422,7 @@ type.defineMethods
 
     @_state = REJECTED
     @_results[0] = error
+    @_tracer.trace this
 
     queue = @_queue
     @_queue = null
@@ -458,6 +475,7 @@ type.defineMethods
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
 
+    @_tracer.trace promise, this
     @_always (parent) ->
       promise._resolve parent, onFulfilled, onRejected
     return
