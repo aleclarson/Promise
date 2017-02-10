@@ -53,10 +53,8 @@ type.defineMethods
     return promise
 
   then: (onFulfilled, onRejected) ->
-
     assertType onFulfilled, Function.Maybe
     assertType onRejected, Function.Maybe
-
     promise = Promise PENDING
     @_then promise, onFulfilled, onRejected
     return promise
@@ -65,9 +63,7 @@ type.defineMethods
     return @fail onRejected
 
   fail: (onRejected) ->
-
     assertType onRejected, Function.Maybe
-
     promise = Promise PENDING
     @_then promise, undefined, onRejected
     return promise
@@ -138,12 +134,12 @@ type.defineMethods
     return promise
 
   assert: (reason, predicate) ->
-
     assertType reason, String
     assertType predicate, Function.Maybe
-    predicate ?= emptyFunction.thatReturnsArgument
 
     promise = Promise PENDING
+    predicate ?= emptyFunction.thatReturnsArgument
+
     @_then promise, (result) ->
       if not predicate result
         throw Error reason
