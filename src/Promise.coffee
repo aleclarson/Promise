@@ -156,6 +156,21 @@ type.defineMethods
 
     return promise
 
+  delay: (delay) ->
+    assertType delay, Number
+
+    promise = Promise PENDING
+    @_tracer.trace promise, this
+    @_always (parent) ->
+
+      resolve = ->
+        promise._inherit parent._results, 1
+        promise._resolve parent
+
+      setTimeout resolve, delay
+
+    return promise
+
   timeout: (delay, callback) ->
 
     assertType delay, Number
