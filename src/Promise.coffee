@@ -19,25 +19,6 @@ type = Type "Promise"
 
 type.trace()
 
-type.defineValues ->
-
-  _state: PENDING
-
-  _unhandled: yes
-
-  _results: [undefined]
-
-  _queue: []
-
-type.initInstance (result) ->
-
-  if result is PENDING
-    @_inherit arguments, 1
-    return
-
-  @_defer result
-  return
-
 type.defineGetters
 
   state: ->
@@ -203,6 +184,173 @@ type.defineMethods
 
     return promise
 
+type.defineStatics
+
+  isFulfilled: (value) ->
+    return no if not isType value, Promise
+    return value.isFulfilled
+
+  isRejected: (value) ->
+    return yes if not isType value, Promise
+    return value.isRejected
+
+  isPending: (value) ->
+    return no if not isType value, Promise
+    return value.isPending
+
+  defer: (resolver) ->
+
+    assertType resolver, Function.Maybe
+
+    promise = Promise PENDING
+
+    if resolver
+      return promise._defer resolver
+
+    return {
+      promise
+      resolve: bind.method promise, "_tryFulfilling"
+      reject: bind.method promise, "_reject"
+    }
+
+  resolve: (value) ->
+    promise = Promise PENDING
+    promise._inherit arguments, 1
+    promise._tryFulfilling value
+    return promise
+
+  reject: (error) ->
+    assertType error, Error.Kind
+    promise = Promise PENDING
+    promise._inherit arguments, 1
+    promise._reject error
+    return promise
+
+  try: (func) ->
+    assertType func, Function
+    promise = Promise PENDING
+    promise._tryResolving func
+    return promise
+
+  delay: (delay) ->
+    assertType delay, Number
+    promise = Promise PENDING
+    fulfill = bind.method promise, "_fulfill"
+    setTimeout fulfill, delay
+    return promise
+
+  wrap: (func) ->
+    assertType func, Function
+    return ->
+      promise = Promise PENDING
+      promise._tryResolving bind.func func, this, arguments
+      return promise
+
+  denodeify: (func) ->
+    return @ify func
+
+  ify: (func) ->
+    assertType func, Function
+    return ->
+      self = this
+      args = arguments
+
+      promise = Promise PENDING
+      return promise._defer (resolve, reject) ->
+
+        Array::push.call args, (error, result) ->
+          if error then reject error
+          else resolve result
+
+        func.apply self, args
+
+  all: (iterable, iterator) ->
+
+    assertType iterator, Function.Maybe
+
+    promise = Promise PENDING
+
+    results =
+      if Array.isArray iterable
+      then new Array iterable.length
+      else if PureObject.test iterable
+      then Object.create null
+      else {}
+
+    if not hasKeys iterable
+      immediate ->
+        promise._fulfill results
+      return promise
+
+    reject = bind.method promise, "_reject"
+    fulfill = (result, key) ->
+      return if has results, key
+      results[key] = result
+      remaining -= 1
+      if remaining is 0
+        promise._fulfill results
+      return
+
+    remaining = 0
+    sync.each iterable, (value, key) ->
+      remaining += 1
+      pending =
+        if iterator
+        then Promise PENDING, key
+        else Promise.resolve value, key
+      pending.then fulfill, reject
+      if iterator
+        pending._tryResolving iterator, [value, key]
+      return
+
+    return promise
+
+  map: (iterable, iterator) ->
+    console.warn "Promise.map() is deprecated! Use Promise.all() instead!"
+    @all iterable, iterator
+
+  chain: (iterable, iterator) ->
+    assertType iterator, Function
+    return sync.reduce iterable, Promise.resolve(), (chain, value, key) ->
+      chain.then -> iterator.call null, value, key
+
+  race: (array) ->
+    assertType array, Array
+    deferred = Promise.defer()
+    for promise in array
+      if promise and promise.then
+        promise.then deferred.resolve, deferred.reject
+    return deferred.promise
+
+  onUnhandledRejection: (fallback) ->
+    @_rejectFallbacks.push fallback
+    return
+
+#
+# Internals
+#
+
+type.defineValues ->
+
+  _state: PENDING
+
+  _unhandled: yes
+
+  _results: [undefined]
+
+  _queue: []
+
+type.initInstance (result) ->
+
+  if result is PENDING
+    @_inherit arguments, 1
+    return
+
+  @_defer result
+  return
+
+type.defineMethods
+
   _inherit: (results, offset) ->
 
     assertType results, Array.or Object
@@ -347,146 +495,6 @@ type.defineMethods
     return this
 
 type.defineStatics
-
-  isFulfilled: (value) ->
-    return no if not isType value, Promise
-    return value.isFulfilled
-
-  isRejected: (value) ->
-    return yes if not isType value, Promise
-    return value.isRejected
-
-  isPending: (value) ->
-    return no if not isType value, Promise
-    return value.isPending
-
-  defer: (resolver) ->
-
-    assertType resolver, Function.Maybe
-
-    promise = Promise PENDING
-
-    if resolver
-      return promise._defer resolver
-
-    return {
-      promise
-      resolve: bind.method promise, "_tryFulfilling"
-      reject: bind.method promise, "_reject"
-    }
-
-  resolve: (value) ->
-    promise = Promise PENDING
-    promise._inherit arguments, 1
-    promise._tryFulfilling value
-    return promise
-
-  reject: (error) ->
-    assertType error, Error.Kind
-    promise = Promise PENDING
-    promise._inherit arguments, 1
-    promise._reject error
-    return promise
-
-  try: (func) ->
-    assertType func, Function
-    promise = Promise PENDING
-    promise._tryResolving func
-    return promise
-
-  wrap: (func) ->
-    assertType func, Function
-    return ->
-      promise = Promise PENDING
-      promise._tryResolving bind.func func, this, arguments
-      return promise
-
-  denodeify: (func) ->
-    return @ify func
-
-  ify: (func) ->
-    assertType func, Function
-    return ->
-      self = this
-      args = arguments
-
-      promise = Promise PENDING
-      return promise._defer (resolve, reject) ->
-
-        Array::push.call args, (error, result) ->
-          if error then reject error
-          else resolve result
-
-        func.apply self, args
-
-  all: (iterable, iterator) ->
-
-    assertType iterator, Function.Maybe
-
-    promise = Promise PENDING
-
-    results =
-      if Array.isArray iterable
-      then new Array iterable.length
-      else if PureObject.test iterable
-      then Object.create null
-      else {}
-
-    if not hasKeys iterable
-      immediate ->
-        promise._fulfill results
-      return promise
-
-    reject = bind.method promise, "_reject"
-    fulfill = (result, key) ->
-      return if has results, key
-      results[key] = result
-      remaining -= 1
-      if remaining is 0
-        promise._fulfill results
-      return
-
-    remaining = 0
-    sync.each iterable, (value, key) ->
-      remaining += 1
-      if iterator
-        pending = Promise PENDING, key
-        pending.then fulfill, reject
-        pending._tryResolving iterator, [value, key]
-      else
-        pending = Promise.resolve value, key
-        pending.then fulfill, reject
-      return
-
-    return promise
-
-  map: (iterable, iterator) ->
-    console.warn "Promise.map() is deprecated! Use Promise.all() instead!"
-    @all iterable, iterator
-
-  chain: (iterable, iterator) ->
-    assertType iterator, Function
-    return sync.reduce iterable, Promise.resolve(), (chain, value, key) ->
-      chain.then -> iterator.call null, value, key
-
-  race: (array) ->
-    assertType array, Array
-    deferred = Promise.defer()
-    for promise in array
-      promise and
-      promise.then and
-      promise.then deferred.resolve, deferred.reject
-    return deferred.promise
-
-  onUnhandledRejection: (fallback) ->
-    @_rejectFallbacks.push fallback
-    return
-
-  _onUnhandledRejection:
-    get: -> emptyFunction
-    set: ->
-      error = Error "'Promise._onUnhandledRejection' is deprecated!"
-      console.log "\n" + error.stack
 
   _rejectFallbacks: []
 
