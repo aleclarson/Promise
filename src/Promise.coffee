@@ -473,7 +473,6 @@ type.defineMethods
 
   _tryResolving: (resolver, args) ->
     assertType resolver, Function
-    assertType args, Array.Maybe
     immediate this, ->
       try value = resolver.apply null, args
       catch error then return @_reject error
