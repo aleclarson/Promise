@@ -378,10 +378,7 @@ type.initInstance (result) ->
 type.defineMethods
 
   _inherit: (results, offset) ->
-
-    assertType results, Array.or Object
-
-    { length } = results
+    {length} = results
     return if offset >= length
 
     index = offset - 1
