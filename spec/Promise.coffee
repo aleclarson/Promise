@@ -9,7 +9,7 @@ describe "Promise(value)", ->
 
   it "returns a new Promise that is fulfilled with `value`", ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
 
     expect foo._results[0]
       .toBe 1
@@ -18,7 +18,7 @@ describe "Promise(value)", ->
 
     foo = Promise.defer()
 
-    bar = Promise foo.promise
+    bar = Promise.resolve foo.promise
 
     foo.resolve 1
 
@@ -35,7 +35,7 @@ describe "Promise(value)", ->
 
   it "inherits any other values passed", ->
 
-    foo = Promise 1, 2, 3
+    foo = Promise.resolve 1, 2, 3
 
     expect foo._results
       .toEqual [ 1, 2, 3 ]
@@ -246,7 +246,7 @@ describe "Promise.all(array, iterator)", ->
 
   it "creates a new Promise that resolves once every item in `array` is resolved", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
     bar = Promise.defer()
 
     Promise.all [ foo, bar.promise ]
@@ -265,7 +265,7 @@ describe "Promise.all(array, iterator)", ->
 
   it "rejects the new Promise if one of the items in `array` is rejected", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
     bar = Promise.defer()
 
     error = FakeError()
@@ -422,7 +422,7 @@ describe "Promise.wrap(func)", ->
 
   it "waits on any promise returned by `func`", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
     func = Promise.wrap -> foo
     bar = func()
 
@@ -496,7 +496,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
 
   it "fulfills the new Promise if `onFulfilled` does not throw", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
     bar = foo.then -> 2
 
     expect bar.isPending
@@ -540,7 +540,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
 
   it "rejects the new Promise if `onFulfilled` throws an error", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
 
     error = FakeError()
     bar = foo.then -> throw error
@@ -598,7 +598,7 @@ describe "promise.then(onFulfilled, onRejected)", ->
   it "supports returning a Promise inside `onFulfilled`", (done) ->
 
     deferred = Promise.defer()
-    foo = Promise 1
+    foo = Promise.resolve 1
     bar = foo.then -> deferred.promise
 
     expect bar.isPending
@@ -667,7 +667,7 @@ describe "promise.always(onResolved)", ->
 
   it "calls `onResolved` when `promise` is fulfilled", (done) ->
 
-    Promise expected = 1
+    Promise.resolve expected = 1
 
     .always ->
 
@@ -703,7 +703,7 @@ describe "promise.always(onResolved)", ->
 
   it "allows `onResolved` to return a Promise", (done) ->
 
-    foo = Promise 1
+    foo = Promise.resolve 1
 
     deferred = Promise.defer()
 
