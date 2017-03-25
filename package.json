@@ -20,8 +20,7 @@
     "immediate": "aleclarson/immediate#4.1.1",
     "isDev": "aleclarson/isDev#2.0.0",
     "isType": "aleclarson/isType#1.0.1",
-    "sync": "aleclarson/sync#1.0.2",
-    "tracer": "aleclarson/tracer#1.0.0"
+    "sync": "aleclarson/sync#1.0.2"
   },
   "devDependencies": {
     "getType": "aleclarson/getType#1.0.0"
