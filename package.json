@@ -10,17 +10,17 @@
     "postinstall": "npm run build"
   },
   "dependencies": {
-    "PureObject": "aleclarson/PureObject#1.0.1",
+    "PureObject": "aleclarson/PureObject#1.0.2",
     "Type": "aleclarson/Type#2.3.1",
-    "assertType": "aleclarson/assertType#2.0.1",
-    "bind": "aleclarson/bind#1.0.2",
+    "assertType": "aleclarson/assertType#2.0.2",
+    "bind": "aleclarson/bind#1.0.3",
     "emptyFunction": "aleclarson/emptyFunction#1.0.0",
     "has": "aleclarson/has#1.0.0",
     "hasKeys": "aleclarson/hasKeys#1.0.0",
-    "immediate": "aleclarson/immediate#1.1.0",
+    "immediate": "aleclarson/immediate#1.1.1",
     "isDev": "aleclarson/isDev#2.0.0",
-    "isType": "aleclarson/isType#1.0.1",
-    "sync": "aleclarson/sync#1.0.2"
+    "isType": "aleclarson/isType#1.0.2",
+    "sync": "aleclarson/sync#1.0.3"
   },
   "devDependencies": {
     "getType": "aleclarson/getType#1.0.0"
