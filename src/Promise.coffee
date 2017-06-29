@@ -462,9 +462,9 @@ type.defineMethods
         @_resolve value
 
     # Support foreign promises.
-    resolver = value and value.then
-    if isType resolver, Function
-      @_defer bind.func resolver, value
+    if value and isType value.then, Function
+      @_defer (resolve, reject) ->
+        value.then resolve, reject
       return
 
     @_fulfill value
