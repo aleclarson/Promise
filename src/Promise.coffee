@@ -11,9 +11,8 @@ sync = require "sync"
 bind = require "bind"
 has = require "has"
 
-if isDev
-  PromiseTracer = require "./PromiseTracer"
-  StubTracer = {trace: emptyFunction}
+StubTracer = {trace: emptyFunction}
+PromiseTracer = require "./PromiseTracer" if isDev
 
 PENDING = Symbol "Promise.PENDING"
 FULFILLED = Symbol "Promise.FULFILLED"
@@ -55,7 +54,7 @@ type.defineMethods
     return promise
 
   trace: ->
-    PromiseTracer().trace this
+    isDev and PromiseTracer().trace this
     return this
 
   then: (onFulfilled, onRejected) ->
@@ -363,7 +362,7 @@ type.defineValues ->
 
   _queue: []
 
-  _tracer: StubTracer if isDev
+  _tracer: StubTracer
 
 type.initInstance (result) ->
 

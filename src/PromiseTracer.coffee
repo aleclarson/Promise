@@ -3,7 +3,7 @@ Type = require "Type"
 
 type = Type "PromiseTracer"
 
-type.defineValues (options) ->
+type.defineValues ->
 
   _promises: new Set
 
