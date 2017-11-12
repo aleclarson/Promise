@@ -18,7 +18,7 @@
     "has": "aleclarson/has#1.0.0",
     "hasKeys": "aleclarson/hasKeys#1.0.0",
     "immediate": "aleclarson/immediate#1.1.1",
-    "isDev": "aleclarson/isDev#2.0.0",
+    "isDev": "aleclarson/isDev#3.0.0",
     "isValid": "aleclarson/isValid#1.0.1",
     "sync": "aleclarson/sync#1.0.3"
   },
