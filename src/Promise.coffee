@@ -64,17 +64,11 @@ type.defineMethods
     @_then promise, onFulfilled, onRejected
     return promise
 
-  catch: (onRejected) ->
-    return @fail onRejected
-
   fail: (onRejected) ->
     assertValid onRejected, "function?"
     promise = Promise PENDING
     @_then promise, undefined, onRejected
     return promise
-
-  finally: (onResolved) ->
-    return @always onResolved
 
   always: (onResolved) ->
     assertValid onResolved, "function"
@@ -262,9 +256,6 @@ type.defineStatics
       promise = Promise PENDING
       promise._tryResolving bind.func func, this, arguments
       return promise
-
-  denodeify: (func) ->
-    return @ify func
 
   ify: (func) ->
     assertValid func, "function"
@@ -514,3 +505,8 @@ type.defineStatics
   _rejectFallbacks: []
 
 module.exports = Promise = type.build()
+
+# Aliased methods
+Promise::catch = Promise::fail
+Promise::finally = Promise::always
+Promise::denodeify = Promise::ify
