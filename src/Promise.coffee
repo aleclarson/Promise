@@ -1,10 +1,10 @@
 
 emptyFunction = require "emptyFunction"
+assertValid = require "assertValid"
 PureObject = require "PureObject"
-assertType = require "assertType"
 immediate = require "immediate"
 hasKeys = require "hasKeys"
-isType = require "isType"
+isValid = require "isValid"
 isDev = require "isDev"
 Type = require "Type"
 sync = require "sync"
@@ -58,27 +58,20 @@ type.defineMethods
     return this
 
   then: (onFulfilled, onRejected) ->
-    assertType onFulfilled, Function.Maybe
-    assertType onRejected, Function.Maybe
+    assertValid onFulfilled, "function?"
+    assertValid onRejected, "function?"
     promise = Promise PENDING
     @_then promise, onFulfilled, onRejected
     return promise
 
-  catch: (onRejected) ->
-    return @fail onRejected
-
   fail: (onRejected) ->
-    assertType onRejected, Function.Maybe
+    assertValid onRejected, "function?"
     promise = Promise PENDING
     @_then promise, undefined, onRejected
     return promise
 
-  finally: (onResolved) ->
-    return @always onResolved
-
   always: (onResolved) ->
-
-    assertType onResolved, Function
+    assertValid onResolved, "function"
 
     promise = Promise PENDING
     @_tracer.trace promise, this
@@ -89,7 +82,7 @@ type.defineMethods
         promise._reject error
         return
 
-      if isType value, Promise
+      if isValid value, Promise
         return value._always ->
           if value.isRejected
             promise._reject value._results[0]
@@ -98,8 +91,9 @@ type.defineMethods
             promise._resolve parent
 
       # TODO: Support "thenables" returned by `always` callbacks.
-      # resolver = value and value.then
-      # if isType resolver, Function
+      resolver = value and value.then
+      if isValid resolver, "function"
+        throw Error "Thenables returned by an `always` function are not yet supported"
       #   promise._defer bind.func resolver, value
       #   return
 
@@ -118,7 +112,7 @@ type.defineMethods
     if not callback
       return this
 
-    assertType callback, Function
+    assertValid callback, "function"
 
     promise = Promise PENDING
     @_tracer.trace promise, this
@@ -141,8 +135,8 @@ type.defineMethods
     return promise
 
   assert: (reason, predicate) ->
-    assertType reason, String
-    assertType predicate, Function.Maybe
+    assertValid reason, "string"
+    assertValid predicate, "function?"
 
     promise = Promise PENDING
     predicate ?= emptyFunction.thatReturnsArgument
@@ -155,7 +149,7 @@ type.defineMethods
     return promise
 
   delay: (delay) ->
-    assertType delay, Number
+    assertValid delay, "number"
 
     promise = Promise PENDING
     @_tracer.trace promise, this
@@ -170,9 +164,8 @@ type.defineMethods
     return promise
 
   timeout: (delay, callback) ->
-
-    assertType delay, Number
-    assertType callback, Function
+    assertValid delay, "number"
+    assertValid callback, "function"
 
     promise = Promise PENDING
     @_tracer.trace promise, this
@@ -206,20 +199,19 @@ type.defineMethods
 type.defineStatics
 
   isFulfilled: (value) ->
-    return no if not isType value, Promise
+    return no unless isValid value, Promise
     return value.isFulfilled
 
   isRejected: (value) ->
-    return yes if not isType value, Promise
+    return yes unless isValid value, Promise
     return value.isRejected
 
   isPending: (value) ->
-    return no if not isType value, Promise
+    return no unless isValid value, Promise
     return value.isPending
 
   defer: (resolver) ->
-
-    assertType resolver, Function.Maybe
+    assertValid resolver, "function?"
 
     promise = Promise PENDING
 
@@ -239,37 +231,33 @@ type.defineStatics
     return promise
 
   reject: (error) ->
-    assertType error, Error.Kind
     promise = Promise PENDING
     promise._inherit arguments, 1
     promise._reject error
     return promise
 
   try: (func) ->
-    assertType func, Function
+    assertValid func, "function"
     promise = Promise PENDING
     promise._tryResolving func
     return promise
 
   delay: (delay) ->
-    assertType delay, Number
+    assertValid delay, "number"
     promise = Promise PENDING
     fulfill = bind.method promise, "_fulfill"
     setTimeout fulfill, delay
     return promise
 
   wrap: (func) ->
-    assertType func, Function
+    assertValid func, "function"
     return ->
       promise = Promise PENDING
       promise._tryResolving bind.func func, this, arguments
       return promise
 
-  denodeify: (func) ->
-    return @ify func
-
   ify: (func) ->
-    assertType func, Function
+    assertValid func, "function"
     return ->
       self = this
       args = arguments
@@ -284,8 +272,7 @@ type.defineStatics
         func.apply self, args
 
   all: (iterable, iterator) ->
-
-    assertType iterator, Function.Maybe
+    assertValid iterator, "function?"
 
     promise = Promise PENDING
 
@@ -332,12 +319,12 @@ type.defineStatics
     @all iterable, iterator
 
   chain: (iterable, iterator) ->
-    assertType iterator, Function
+    assertValid iterator, "function"
     return sync.reduce iterable, Promise.resolve(), (chain, value, key) ->
       chain.then -> iterator.call null, value, key
 
   race: (array) ->
-    assertType array, Array
+    assertValid array, "array"
     deferred = Promise.defer()
     for promise in array
       if promise and promise.then
@@ -384,10 +371,9 @@ type.defineMethods
     return
 
   _resolve: (parent, onFulfilled, onRejected) ->
-
-    assertType parent, Promise
-    assertType onFulfilled, Function.Maybe
-    assertType onRejected, Function.Maybe
+    assertValid parent, Promise
+    assertValid onFulfilled, "function?"
+    assertValid onRejected, "function?"
 
     if parent.isPending
       throw Error "The parent Promise must be resolved!"
@@ -405,7 +391,7 @@ type.defineMethods
 
   _fulfill: (value) ->
 
-    if isType value, Promise
+    if isValid value, Promise
       throw Error "Cannot fulfill with a Promise as the result!"
 
     return if not @isPending
@@ -425,9 +411,7 @@ type.defineMethods
       return
 
   _reject: (error) ->
-
-    assertType error, Error.Kind
-
+    assertValid error, "error"
     return if not @isPending
 
     @_state = REJECTED
@@ -455,13 +439,13 @@ type.defineMethods
 
   _tryFulfilling: (value) ->
 
-    if isType value, Promise
+    if isValid value, Promise
       return value._always =>
         @_inherit value._results, 1
         @_resolve value
 
     # Support foreign promises.
-    if value and isType value.then, Function
+    if value and isValid value.then, "function"
       @_defer (resolve, reject) ->
         value.then resolve, reject
       return
@@ -470,7 +454,7 @@ type.defineMethods
     return
 
   _tryResolving: (resolver, args) ->
-    assertType resolver, Function
+    assertValid resolver, "function"
     immediate this, ->
       try value = resolver.apply null, args
       catch error then return @_reject error
@@ -479,10 +463,9 @@ type.defineMethods
       @_tryFulfilling value
 
   _then: (promise, onFulfilled, onRejected) ->
-
-    assertType promise, Promise
-    assertType onFulfilled, Function.Maybe
-    assertType onRejected, Function.Maybe
+    assertValid promise, Promise
+    assertValid onFulfilled, "function?"
+    assertValid onRejected, "function?"
 
     @_tracer.trace promise, this
     @_always (parent) ->
@@ -490,8 +473,7 @@ type.defineMethods
     return
 
   _always: (onResolved) ->
-
-    assertType onResolved, Function
+    assertValid onResolved, "function"
 
     @_unhandled = no
 
@@ -503,8 +485,7 @@ type.defineMethods
     return
 
   _defer: (resolver) ->
-
-    assertType resolver, Function
+    assertValid resolver, "function"
 
     if resolver.length
       resolve = bind.method this, "_tryFulfilling"
@@ -522,3 +503,8 @@ type.defineStatics
   _rejectFallbacks: []
 
 module.exports = Promise = type.build()
+
+# Aliased methods
+Promise::catch = Promise::fail
+Promise::finally = Promise::always
+Promise::denodeify = Promise::ify
