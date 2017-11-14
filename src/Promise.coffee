@@ -231,7 +231,6 @@ type.defineStatics
     return promise
 
   reject: (error) ->
-    assertValid error, "error"
     promise = Promise PENDING
     promise._inherit arguments, 1
     promise._reject error
@@ -413,7 +412,6 @@ type.defineMethods
 
   _reject: (error) ->
     assertValid error, "error"
-
     return if not @isPending
 
     @_state = REJECTED
