@@ -446,8 +446,7 @@ type.defineMethods
 
     # Support foreign promises.
     if value and isValid value.then, "function"
-      @_defer (resolve, reject) ->
-        value.then resolve, reject
+      value.then @_tryFulfilling.bind(this), @_reject.bind(this)
       return
 
     @_fulfill value
