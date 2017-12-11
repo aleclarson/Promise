@@ -1,6 +1,6 @@
 {
   "name": "Promise",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "main": "js/Promise",
   "dependencies": {
     "PureObject": "aleclarson/PureObject#1.0.2",

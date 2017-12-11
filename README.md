@@ -1,5 +1,5 @@
 
-# Promise v2.3.0 ![experimental](https://img.shields.io/badge/stability-experimental-EC5315.svg?style=flat)
+# Promise v2.3.1 ![experimental](https://img.shields.io/badge/stability-experimental-EC5315.svg?style=flat)
 
 A `Promise` implementation written in CoffeeScript and derived from [calvinmetcalf/lie](https://github.com/calvinmetcalf/lie).
 
